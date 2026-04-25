@@ -8,7 +8,7 @@ const { useState, useEffect, useRef, useMemo, useCallback } = React;
 // Helpers
 // ─────────────────────────────────────────────────────────────
 const STAGE_BY_ID = Object.fromEntries(window.STAGES.map(s => [s.id, s]));
-const DAY_BY_ID   = Object.fromEntries(window.DAYS.map(d => [d.id, d]));
+const DAY_BY_ID   = Object.fromEntries(window.DAYS_FULL.map(d => [d.id, d]));
 
 const toMin = (hhmm) => {
   const [h, m] = hhmm.split(':').map(Number);
