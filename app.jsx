@@ -1025,10 +1025,19 @@ function computeTopPicks(dayBands) {
 
 function ScheduleView({ scheduled, activeDay, onRemove }) {
   const [previewBand, setPreviewBand] = useState(null);
+  const headerRef = useRef(null);
+  const bodyRef = useRef(null);
 
   const dayBands = scheduled
     .filter(b => b.day === activeDay)
     .sort((a, b) => toMin(a.start) - toMin(b.start));
+
+  // Sync header horizontal scroll with body scroll
+  const onBodyScroll = useCallback(() => {
+    if (headerRef.current && bodyRef.current) {
+      headerRef.current.scrollLeft = bodyRef.current.scrollLeft;
+    }
+  }, []);
 
   if (dayBands.length === 0) {
     return (
@@ -1059,89 +1068,93 @@ function ScheduleView({ scheduled, activeDay, onRemove }) {
 
   const startH = Math.max(11, Math.min(...dayBands.map(b => Math.floor(toMin(b.start) / 60))));
   const endH   = Math.min(22, Math.max(...dayBands.map(b => Math.ceil(toMin(b.end) / 60))));
-  const pxPerHour = 64;
+  const pxPerHour = 80;
   const totalH = (endH - startH) * pxPerHour;
 
-  // Only show columns for stages that have picked acts today, in canonical order
+  // One column per stage that has picks, in canonical STAGES order
   const activeStages = window.STAGES.filter(s => dayBands.some(b => b.stage === s.id));
   const stageColIdx = Object.fromEntries(activeStages.map((s, i) => [s.id, i]));
-  const colW = 72;
-  const timeAxisW = 40;
-  const totalW = timeAxisW + activeStages.length * colW;
+  const colW = 120;
+  const timeAxisW = 44;
 
   const conflictsOf = (b) => dayBands.filter(o => o.id !== b.id && overlap(o, b));
 
   return (
-    <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto', position: 'relative' }}>
-      <div style={{ minWidth: totalW, paddingBottom: 100 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
 
-        {/* Status banner */}
+      {/* Status banner — never scrolls */}
+      <div style={{ flexShrink: 0, padding: '6px 10px 0' }}>
         {conflictIds.size > 0 ? (
           <div style={{
-            margin: '8px 10px 0', background: 'rgba(220,80,70,0.12)',
-            border: '1px solid rgba(220,80,70,0.35)', color: '#FFB4A8',
-            borderRadius: 8, padding: '6px 10px', fontSize: 11, lineHeight: 1.4,
+            background: 'rgba(220,80,70,0.12)', border: '1px solid rgba(220,80,70,0.35)',
+            color: '#FFB4A8', borderRadius: 8, padding: '6px 10px', fontSize: 11, lineHeight: 1.4,
           }}>
-            <b>⚠ Conflicts.</b> Top picks are bright — tap a dimmed show to resolve.
+            <b>⚠ Conflicts.</b> Bright = top pick. Tap any show to preview or resolve.
           </div>
         ) : (
           <div style={{
-            margin: '8px 10px 0', background: 'rgba(74,222,128,0.07)',
-            border: '1px solid rgba(74,222,128,0.18)', color: '#86EFAC',
-            borderRadius: 8, padding: '6px 10px', fontSize: 11,
+            background: 'rgba(74,222,128,0.07)', border: '1px solid rgba(74,222,128,0.18)',
+            color: '#86EFAC', borderRadius: 8, padding: '6px 10px', fontSize: 11,
           }}>
             ✓ {dayBands.length} set{dayBands.length !== 1 ? 's' : ''} — no conflicts
           </div>
         )}
+      </div>
 
-        {/* Stage header — sticky, scrolls horizontally with content */}
-        <div style={{
-          position: 'sticky', top: 0, zIndex: 20,
-          display: 'flex', marginLeft: timeAxisW,
-          background: '#111109', borderBottom: '1px solid rgba(255,255,255,0.07)',
-          marginTop: 8,
-        }}>
-          {activeStages.map(s => (
-            <div key={s.id} style={{
-              width: colW, flexShrink: 0,
-              padding: '5px 3px 5px',
-              fontSize: 9, fontWeight: 800, textAlign: 'center',
-              color: s.tone, textTransform: 'uppercase', letterSpacing: 0.4,
-              borderLeft: `1px solid rgba(255,255,255,0.06)`,
-              lineHeight: 1.2,
-            }}>
-              {STAGE_ABBREV[s.id] || s.name}
-            </div>
-          ))}
-        </div>
+      {/* Stage header row — fixed height, syncs scroll-x with body */}
+      <div ref={headerRef} style={{
+        flexShrink: 0, overflowX: 'hidden',
+        display: 'flex', background: '#181614',
+        borderTop: '1px solid rgba(255,255,255,0.06)',
+        borderBottom: '2px solid rgba(255,255,255,0.1)',
+        marginTop: 8,
+      }}>
+        {/* spacer for time axis */}
+        <div style={{ width: timeAxisW, flexShrink: 0 }} />
+        {activeStages.map(s => (
+          <div key={s.id} style={{
+            width: colW, flexShrink: 0,
+            padding: '7px 6px',
+            fontSize: 11, fontWeight: 800, textAlign: 'center',
+            color: s.tone, textTransform: 'uppercase', letterSpacing: 0.5,
+            borderLeft: '1px solid rgba(255,255,255,0.07)',
+            lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
+            {STAGE_ABBREV[s.id] || s.name}
+          </div>
+        ))}
+      </div>
 
-        {/* Timeline grid */}
-        <div style={{ position: 'relative', height: totalH, marginLeft: timeAxisW }}>
+      {/* Scrollable timeline body */}
+      <div ref={bodyRef} onScroll={onBodyScroll}
+        style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}>
+        <div style={{ minWidth: timeAxisW + activeStages.length * colW, height: totalH + 80, position: 'relative' }}>
 
           {/* Hour lines + time labels */}
           {Array.from({ length: endH - startH + 1 }, (_, i) => {
             const h = startH + i;
             const h12 = ((h + 11) % 12) + 1;
-            const ap = h >= 12 ? 'p' : 'a';
+            const ap = h >= 12 ? 'PM' : 'AM';
             return (
               <div key={h} style={{ position: 'absolute', left: 0, right: 0, top: i * pxPerHour }}>
                 <div style={{
-                  position: 'absolute', left: -timeAxisW, top: -7,
-                  width: timeAxisW - 4, textAlign: 'right',
-                  fontSize: 9, fontWeight: 600, color: 'rgba(245,241,234,0.35)',
+                  position: 'absolute', left: 2, top: -8,
+                  width: timeAxisW - 6, textAlign: 'right',
+                  fontSize: 10, fontWeight: 600, color: 'rgba(245,241,234,0.4)',
                   fontVariantNumeric: 'tabular-nums',
-                }}>{h12}{ap}</div>
-                <div style={{ height: 1, background: 'rgba(245,241,234,0.07)' }} />
+                }}>{h12} {ap}</div>
+                <div style={{ position: 'absolute', left: timeAxisW, right: 0, height: 1, background: 'rgba(245,241,234,0.07)' }} />
               </div>
             );
           })}
 
-          {/* Column dividers */}
+          {/* Column backgrounds — alternating subtle tint */}
           {activeStages.map((s, i) => (
             <div key={s.id} style={{
-              position: 'absolute', top: 0, bottom: 0,
-              left: i * colW, width: 1,
-              background: 'rgba(255,255,255,0.05)',
+              position: 'absolute', top: 0, height: totalH,
+              left: timeAxisW + i * colW, width: colW,
+              background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.018)',
+              borderLeft: '1px solid rgba(255,255,255,0.05)',
             }} />
           ))}
 
@@ -1150,7 +1163,7 @@ function ScheduleView({ scheduled, activeDay, onRemove }) {
             const stage = STAGE_BY_ID[b.stage];
             const colIdx = stageColIdx[b.stage] ?? 0;
             const topPx = (toMin(b.start) - startH * 60) / 60 * pxPerHour;
-            const heightPx = Math.max((toMin(b.end) - toMin(b.start)) / 60 * pxPerHour - 3, 28);
+            const heightPx = Math.max((toMin(b.end) - toMin(b.start)) / 60 * pxPerHour - 4, 36);
             const isTop = topPicks.has(b.id);
             const isConflict = conflictIds.has(b.id);
 
@@ -1160,27 +1173,29 @@ function ScheduleView({ scheduled, activeDay, onRemove }) {
                 style={{
                   position: 'absolute',
                   top: topPx, height: heightPx,
-                  left: colIdx * colW + 2,
-                  width: colW - 5,
-                  background: isTop ? `${stage.tone}e0` : `${stage.tone}28`,
-                  border: isTop ? `1px solid ${stage.tone}` : `1px dashed ${stage.tone}66`,
-                  borderRadius: 6, padding: '3px 5px',
-                  color: isTop ? '#fff' : 'rgba(255,255,255,0.4)',
+                  left: timeAxisW + colIdx * colW + 3,
+                  width: colW - 7,
+                  background: isTop ? `${stage.tone}d8` : `${stage.tone}22`,
+                  border: isTop
+                    ? `1.5px solid ${stage.tone}`
+                    : `1.5px dashed ${stage.tone}55`,
+                  borderRadius: 8, padding: '5px 8px',
+                  color: isTop ? '#fff' : 'rgba(255,255,255,0.38)',
                   cursor: 'pointer', overflow: 'hidden',
-                  display: 'flex', flexDirection: 'column', gap: 1,
+                  display: 'flex', flexDirection: 'column', gap: 2,
                   boxSizing: 'border-box',
                 }}>
                 {isTop && isConflict && (
-                  <div style={{ fontSize: 7, fontWeight: 900, color: '#FCD34D', letterSpacing: 0.5, lineHeight: 1 }}>★ TOP</div>
+                  <div style={{ fontSize: 8, fontWeight: 900, color: '#FCD34D', letterSpacing: 0.6, lineHeight: 1 }}>★ TOP PICK</div>
                 )}
                 <div style={{
-                  fontSize: 10, fontWeight: 700, lineHeight: 1.2,
+                  fontSize: 13, fontWeight: 700, lineHeight: 1.25,
                   display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
                 }}>
                   {b.name}
                 </div>
-                <div style={{ fontSize: 8, opacity: 0.85, fontVariantNumeric: 'tabular-nums', marginTop: 'auto' }}>
-                  {fmtTimeShort(b.start)}
+                <div style={{ fontSize: 10, opacity: 0.8, fontVariantNumeric: 'tabular-nums', marginTop: 'auto' }}>
+                  {fmtTimeShort(b.start)}–{fmtTimeShort(b.end)}
                 </div>
               </div>
             );
