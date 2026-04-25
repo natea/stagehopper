@@ -349,7 +349,24 @@ function ActionBar({ onSkip, onAdd, onUndo, canUndo }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       gap: 22, padding: '10px 0 14px',
     }}>
-      {btn('↺', onUndo, canUndo ? '#A1A1AA' : '#E5E5E5', 44)}
+      {/* Undo — only rendered when there's something to undo */}
+      {canUndo ? (
+        <button onClick={onUndo} style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          gap: 3, border: 0, background: 'none', cursor: 'pointer', padding: 0,
+        }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: 22, border: 0,
+            background: '#fff', color: '#A1A1AA',
+            boxShadow: '0 6px 16px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.12)',
+            fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>↺</div>
+          <span style={{ fontSize: 9, fontWeight: 600, color: 'rgba(245,241,234,0.45)', letterSpacing: 0.3, textTransform: 'uppercase' }}>Undo</span>
+        </button>
+      ) : (
+        /* Invisible spacer keeps ✕ and ♥ centered */
+        <div style={{ width: 44 }} />
+      )}
       {btn('✕', onSkip, '#F87171', 56)}
       {btn('♥', onAdd, '#22C55E', 56)}
     </div>
@@ -806,11 +823,11 @@ function DiscoverView({ deck, onSwipe, onUndo, undoStack, scheduled, soundOn, se
           </div>
           {undoStack.length > 0 && (
             <button onClick={onUndo} style={{
-              marginTop: 16, padding: '8px 16px', borderRadius: 8,
+              marginTop: 16, padding: '8px 20px', borderRadius: 8,
               border: '1px solid rgba(245,241,234,0.2)',
               background: 'transparent', color: '#F5F1EA',
               fontSize: 13, fontWeight: 600, cursor: 'pointer',
-            }}>↺ Undo last</button>
+            }}>↺ Undo last swipe</button>
           )}
         </div>
       </div>
