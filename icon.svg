@@ -1,0 +1,13 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="g" cx="50%" cy="40%" r="70%">
+      <stop offset="0%" stop-color="#3a2a25"/>
+      <stop offset="100%" stop-color="#1a1715"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#g)"/>
+  <text x="256" y="200" text-anchor="middle" fill="#F5F1EA" font-family="Georgia, serif" font-size="76" font-weight="700">Jazz</text>
+  <text x="256" y="270" text-anchor="middle" fill="#F5F1EA" font-family="Georgia, serif" font-size="76" font-weight="700">Fest</text>
+  <circle cx="256" cy="370" r="56" fill="#C2410C"/>
+  <polygon points="240,340 240,400 290,370" fill="#fff"/>
+</svg>

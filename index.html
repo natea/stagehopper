@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+<title>Jazz Fest ScheduleBot</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#1a1715" />
+
+<!-- iOS-specific: makes the home-screen launch full-screen, no Safari chrome -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Jazz Fest" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png" />
+
+<style>
+  html, body { margin: 0; padding: 0; background: #1a1715; min-height: 100vh; }
+  body {
+    font-family: -apple-system, system-ui, "Segoe UI", sans-serif;
+    color: #F5F1EA;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; padding: 20px; box-sizing: border-box;
+    /* Respect iOS safe areas when launched as standalone PWA */
+    padding-top: env(safe-area-inset-top, 20px);
+    padding-bottom: env(safe-area-inset-bottom, 20px);
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0; z-index: -1;
+    background:
+      radial-gradient(circle at 20% 10%, rgba(194,65,12,0.18), transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(190,24,93,0.15), transparent 55%),
+      radial-gradient(circle at 60% 30%, rgba(3,105,161,0.12), transparent 50%),
+      #1a1715;
+  }
+  #root { display: contents; }
+  .device-host {
+    width: 402px; height: 874px; position: relative;
+    max-width: 100vw;
+    max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  }
+  /* When running as installed PWA, drop the 20px frame so the app fills the screen */
+  @media all and (display-mode: standalone) {
+    body { padding: 0; }
+    .device-host { width: 100vw; height: 100vh; }
+  }
+</style>
+</head>
+<body>
+
+<div id="root">
+  <div class="device-host" id="device-mount"></div>
+</div>
+
+<!-- React + Babel -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+
+<!-- Data + components -->
+<script src="schedule.js"></script>
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="app.jsx"></script>
+
+<script type="text/babel">
+  const Mount = () => {
+    const App = window.App;
+    const IOSDevice = window.IOSDevice;
+    if (!App || !IOSDevice) return null;
+    return (
+      <IOSDevice width={402} height={874} dark={true}>
+        <App />
+      </IOSDevice>
+    );
+  };
+  setTimeout(() => {
+    ReactDOM.createRoot(document.getElementById('device-mount')).render(<Mount />);
+  }, 100);
+</script>
+
+<!-- Register service worker for offline + auto-update -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+</script>
+
+</body>
+</html>

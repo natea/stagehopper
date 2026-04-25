@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Jazz Festival ScheduleBot</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #1a1715; min-height: 100vh; }
+  body {
+    font-family: -apple-system, system-ui, "Segoe UI", sans-serif;
+    color: #F5F1EA;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; padding: 20px; box-sizing: border-box;
+  }
+  /* Background texture */
+  body::before {
+    content: ''; position: fixed; inset: 0; z-index: -1;
+    background:
+      radial-gradient(circle at 20% 10%, rgba(194,65,12,0.18), transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(190,24,93,0.15), transparent 55%),
+      radial-gradient(circle at 60% 30%, rgba(3,105,161,0.12), transparent 50%),
+      #1a1715;
+  }
+  #root { display: contents; }
+  .device-host {
+    width: 402px; height: 874px; position: relative;
+  }
+</style>
+</head>
+<body>
+
+<div id="root">
+  <div class="device-host" id="device-mount"></div>
+</div>
+
+<template id="__bundler_thumbnail" data-bg-color="#1a1715">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#1a1715"/>
+    <text x="600" y="340" text-anchor="middle" fill="#F5F1EA" font-family="Georgia, serif" font-size="120" font-weight="700">Jazz Fest</text>
+    <text x="600" y="430" text-anchor="middle" fill="#C2410C" font-family="system-ui" font-size="48" font-weight="600" letter-spacing="6">SCHEDULEBOT</text>
+    <circle cx="600" cy="540" r="40" fill="#FF0000"/>
+    <polygon points="588,520 588,560 622,540" fill="#fff"/>
+  </svg>
+</template>
+
+<!-- React + Babel -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<!-- Data + components -->
+<script src="schedule.js"></script>
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="app.jsx"></script>
+
+<!-- Mount -->
+<script type="text/babel">
+  const Mount = () => {
+    const App = window.App;
+    const IOSDevice = window.IOSDevice;
+    if (!App || !IOSDevice) return null;
+    return (
+      <IOSDevice width={402} height={874} dark={true}>
+        <App />
+      </IOSDevice>
+    );
+  };
+  // Defer mount until all babel scripts have executed.
+  setTimeout(() => {
+    ReactDOM.createRoot(document.getElementById('device-mount'))
+      .render(<Mount />);
+  }, 100);
+</script>
+
+</body>
+</html>

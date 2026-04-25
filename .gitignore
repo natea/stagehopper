@@ -1,0 +1,13 @@
+# Source materials, not part of the deployed app
+uploads/
+2026-nojhf-8day-cubes.pdf
+excalidraw.log
+
+# Stale pre-bundled HTML — has outdated baked-in schedule;
+# the deployed site is index.html, which loads the live schedule.js.
+Jazz Festival ScheduleBot - standalone.html
+
+# OS / editor cruft
+.DS_Store
+*.swp
+node_modules/
