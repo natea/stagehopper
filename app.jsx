@@ -1175,81 +1175,6 @@ function DiscoverView({ deck, slotContext, allChosen, onSwipe, onUndo, undoStack
 }
 
 // ─────────────────────────────────────────────────────────────
-// Conflict prompt modal
-// ─────────────────────────────────────────────────────────────
-function ConflictModal({ band, conflicts, onCancel, onReplace, onAddBoth }) {
-  if (!band) return null;
-  return (
-    <div style={{
-      position: 'absolute', inset: 0, zIndex: 100,
-      background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)',
-      display: 'flex', alignItems: 'flex-end',
-      animation: 'fade 200ms ease',
-    }}
-    onClick={onCancel}>
-      <div onClick={(e) => e.stopPropagation()} style={{
-        background: '#1A1816', color: '#F5F1EA',
-        borderRadius: '20px 20px 0 0',
-        padding: '20px 20px 32px',
-        width: '100%', boxSizing: 'border-box',
-      }}>
-        <div style={{
-          width: 36, height: 4, borderRadius: 2,
-          background: 'rgba(245,241,234,0.25)',
-          margin: '0 auto 14px',
-        }} />
-        <div style={{
-          fontFamily: 'Georgia, serif', fontSize: 19, fontWeight: 700,
-          marginBottom: 4, lineHeight: 1.2,
-        }}>Conflict on your schedule</div>
-        <div style={{ fontSize: 13, color: 'rgba(245,241,234,0.7)', marginBottom: 14 }}>
-          <b>{band.name}</b> overlaps with:
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-          {conflicts.map(c => (
-            <div key={c.id} style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '10px 12px', borderRadius: 10,
-              background: 'rgba(255,255,255,0.06)',
-            }}>
-              <div style={{
-                width: 4, height: 32, borderRadius: 2,
-                background: STAGE_BY_ID[c.stage].tone,
-              }} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>{c.name}</div>
-                <div style={{ fontSize: 11, color: 'rgba(245,241,234,0.6)', fontVariantNumeric: 'tabular-nums' }}>
-                  {fmtTimeShort(c.start)}–{fmtTimeShort(c.end)} · {STAGE_BY_ID[c.stage].name}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <button onClick={onReplace} style={{
-            border: 0, background: '#F5F1EA', color: '#0F0E0C',
-            padding: '13px', borderRadius: 12, fontWeight: 700, fontSize: 14,
-            cursor: 'pointer', fontFamily: 'inherit',
-          }}>Replace conflicting set{conflicts.length > 1 ? 's' : ''}</button>
-          <button onClick={onAddBoth} style={{
-            border: '1px solid rgba(245,241,234,0.2)', background: 'transparent',
-            color: '#F5F1EA',
-            padding: '13px', borderRadius: 12, fontWeight: 600, fontSize: 14,
-            cursor: 'pointer', fontFamily: 'inherit',
-          }}>Add anyway (stage-hop)</button>
-          <button onClick={onCancel} style={{
-            border: 0, background: 'transparent',
-            color: 'rgba(245,241,234,0.6)',
-            padding: '8px', fontWeight: 500, fontSize: 13,
-            cursor: 'pointer', fontFamily: 'inherit',
-          }}>Cancel</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
 // App
 // ─────────────────────────────────────────────────────────────
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
@@ -1277,7 +1202,6 @@ function App() {
   const [view, setView] = useState('discover');
   const [soundOn, setSoundOn] = useState(t.soundOn);
   const [undoStack, setUndoStack] = useState([]);
-  const [pendingConflict, setPendingConflict] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showIntro, setShowIntro] = useState(() => !localStorage.getItem(LS_INTRO));
   const [mapView, setMapView] = useState(null); // 'festival' | 'access' | null
@@ -1366,37 +1290,11 @@ function App() {
   const handleSwipe = useCallback((band, dir) => {
     if (dir === 'left') {
       setRejectedIds(prev => new Set([...prev, band.id]));
-      setUndoStack(prev => [...prev, { band, dir }]);
-      return;
+    } else {
+      setScheduledIds(prev => new Set([...prev, band.id]));
     }
-    // dir === 'right' → check conflicts first
-    const cf = conflictsWith(band, scheduledBands);
-    if (cf.length > 0) {
-      setPendingConflict({ band, conflicts: cf });
-      return;
-    }
-    setScheduledIds(prev => new Set([...prev, band.id]));
     setUndoStack(prev => [...prev, { band, dir }]);
-  }, [scheduledBands]);
-
-  const handleReplace = () => {
-    const { band, conflicts } = pendingConflict;
-    setScheduledIds(prev => {
-      const next = new Set(prev);
-      conflicts.forEach(c => next.delete(c.id));
-      next.add(band.id);
-      return next;
-    });
-    setUndoStack(prev => [...prev, { band, dir: 'right', replaced: conflicts.map(c => c.id) }]);
-    setPendingConflict(null);
-  };
-  const handleAddBoth = () => {
-    const { band } = pendingConflict;
-    setScheduledIds(prev => new Set([...prev, band.id]));
-    setUndoStack(prev => [...prev, { band, dir: 'right' }]);
-    setPendingConflict(null);
-  };
-  const handleCancelConflict = () => setPendingConflict(null);
+  }, []);
 
   const handleUndo = () => {
     setUndoStack(prev => {
@@ -1406,9 +1304,6 @@ function App() {
         setRejectedIds(s => { const n = new Set(s); n.delete(last.band.id); return n; });
       } else {
         setScheduledIds(s => { const n = new Set(s); n.delete(last.band.id); return n; });
-        if (last.replaced) {
-          setScheduledIds(s => new Set([...s, ...last.replaced]));
-        }
       }
       return prev.slice(0, -1);
     });
@@ -1480,14 +1375,6 @@ function App() {
           onRemove={handleRemove}
         />
       )}
-
-      <ConflictModal
-        band={pendingConflict?.band}
-        conflicts={pendingConflict?.conflicts || []}
-        onCancel={handleCancelConflict}
-        onReplace={handleReplace}
-        onAddBoth={handleAddBoth}
-      />
 
       {/* Hamburger menu */}
       <HamburgerMenu
