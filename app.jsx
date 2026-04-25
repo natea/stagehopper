@@ -1097,29 +1097,36 @@ function SlotBanner({ ctx, onOpenStagePicker, onExitStage }) {
   );
 }
 
-function DiscoverView({ deck, slotContext, onSwipe, onUndo, undoStack, scheduled, soundOn, setSoundOn, browseStage, onBrowseStage, onOpenStagePicker }) {
+function DiscoverView({ deck, slotContext, allChosen, onSwipe, onUndo, undoStack, scheduled, soundOn, setSoundOn, browseStage, onBrowseStage, onOpenStagePicker, onResetDay }) {
   if (deck.length === 0) {
+    if (allChosen) {
+      // Every timeslot has a chosen band — genuinely done
+      return (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32, textAlign: 'center', color: 'rgba(245,241,234,0.6)' }}>
+          <div>
+            <div style={{ fontSize: 40, marginBottom: 8 }}>🎉</div>
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4, color: '#F5F1EA' }}>You're all set for this day!</div>
+            <div style={{ fontSize: 13, marginBottom: 16 }}>Every timeslot has a pick. Tap "Mine" to see your schedule.</div>
+            {undoStack.length > 0 && (
+              <button onClick={onUndo} style={{ padding: '8px 20px', borderRadius: 8, border: '1px solid rgba(245,241,234,0.2)', background: 'transparent', color: '#F5F1EA', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>↺ Undo last swipe</button>
+            )}
+          </div>
+        </div>
+      );
+    }
+    // Some slots were skipped (all rejected) — offer reset
     return (
-      <div style={{
-        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 32, textAlign: 'center', color: 'rgba(245,241,234,0.6)',
-      }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32, textAlign: 'center', color: 'rgba(245,241,234,0.6)' }}>
         <div>
-          <div style={{ fontSize: 40, marginBottom: 8 }}>🎺</div>
-          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4, color: '#F5F1EA' }}>
-            You're all set for this day.
+          <div style={{ fontSize: 40, marginBottom: 8 }}>🎷</div>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4, color: '#F5F1EA' }}>No more acts to review.</div>
+          <div style={{ fontSize: 13, marginBottom: 20 }}>You've passed on all remaining acts for this day. Reset to start over, or check "Mine" for your picks.</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
+            {undoStack.length > 0 && (
+              <button onClick={onUndo} style={{ padding: '8px 20px', borderRadius: 8, border: '1px solid rgba(245,241,234,0.2)', background: 'transparent', color: '#F5F1EA', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>↺ Undo last swipe</button>
+            )}
+            <button onClick={onResetDay} style={{ padding: '10px 24px', borderRadius: 8, border: 0, background: 'rgba(245,241,234,0.12)', color: '#F5F1EA', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Reset this day's acts</button>
           </div>
-          <div style={{ fontSize: 13 }}>
-            Tap "Mine" to review your schedule.
-          </div>
-          {undoStack.length > 0 && (
-            <button onClick={onUndo} style={{
-              marginTop: 16, padding: '8px 20px', borderRadius: 8,
-              border: '1px solid rgba(245,241,234,0.2)',
-              background: 'transparent', color: '#F5F1EA',
-              fontSize: 13, fontWeight: 600, cursor: 'pointer',
-            }}>↺ Undo last swipe</button>
-          )}
         </div>
       </div>
     );
@@ -1295,7 +1302,7 @@ function App() {
   );
 
   // ── Deck computation ─────────────────────────────────────────
-  const { deck, slotContext } = useMemo(() => {
+  const { deck, slotContext, allChosen } = useMemo(() => {
     const allDay = bands.filter(b => b.day === activeDay);
 
     // ── Stage-browse mode ──────────────────────────────────────
@@ -1328,18 +1335,32 @@ function App() {
       return null; // past slot
     };
 
+    // A slot is "done" ONLY when the user has chosen ≥1 band from it.
+    // Rejected-only slots are skipped for display but are NOT done —
+    // they don't contribute to "you're all set."
+    let allChosen = true; // flip to false if any slot lacks a choice
+
     for (let i = 0; i < slots.length; i++) {
       const slot = slots[i];
       const slotBands = allDay.filter(b => b.start === slot);
-      if (slotBands.some(b => scheduledIds.has(b.id))) continue; // chosen → slot done
+      const hasChosen = slotBands.some(b => scheduledIds.has(b.id));
+
+      if (hasChosen) continue; // genuinely done — user picked something
+
+      // No choice yet for this slot.
+      allChosen = false;
       const pending = slotBands.filter(b => !scheduledIds.has(b.id) && !rejectedIds.has(b.id));
-      if (pending.length === 0) continue; // all rejected → slot done
+      if (pending.length === 0) continue; // all rejected, nothing to show — keep walking
+
+      // Found a slot with cards to show.
       return {
         deck: pending,
         slotContext: { label: slotLabel(slot), time: fmtTime(slot), total: slotBands.length, slotIdx: i, totalSlots: slots.length },
+        allChosen: false,
       };
     }
-    return { deck: [], slotContext: null };
+    // Deck exhausted — distinguish "truly all set" from "everything rejected"
+    return { deck: [], slotContext: null, allChosen };
   }, [bands, activeDay, browseStage, scheduledIds, rejectedIds]);
 
   const handleSwipe = useCallback((band, dir) => {
@@ -1435,6 +1456,7 @@ function App() {
         <DiscoverView
           deck={deck}
           slotContext={slotContext}
+          allChosen={allChosen}
           onSwipe={handleSwipe}
           onUndo={handleUndo}
           undoStack={undoStack}
@@ -1444,6 +1466,12 @@ function App() {
           browseStage={browseStage}
           onBrowseStage={setBrowseStage}
           onOpenStagePicker={() => setStagePickerOpen(true)}
+          onResetDay={() => {
+            const dayBandIds = bands.filter(b => b.day === activeDay).map(b => b.id);
+            setRejectedIds(prev => { const n = new Set(prev); dayBandIds.forEach(id => n.delete(id)); return n; });
+            setScheduledIds(prev => { const n = new Set(prev); dayBandIds.forEach(id => n.delete(id)); return n; });
+            setUndoStack([]);
+          }}
         />
       ) : (
         <ScheduleView
