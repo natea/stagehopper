@@ -923,7 +923,7 @@ function ConflictModal({ band, conflicts, onCancel, onReplace, onAddBoth }) {
 // App
 // ─────────────────────────────────────────────────────────────
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
-  "scheduleMode": "weekend",
+  "scheduleMode": "full",
   "soundOn": false
 }/*EDITMODE-END*/;
 
@@ -943,7 +943,7 @@ function App() {
 
   const [scheduledIds, setScheduledIds] = useState(() => loadSet(LS_KEY));
   const [rejectedIds, setRejectedIds] = useState(() => loadSet(LS_REJECT));
-  const [activeDay, setActiveDay] = useState(() => localStorage.getItem(LS_DAY) || 'd2');
+  const [activeDay, setActiveDay] = useState(() => localStorage.getItem(LS_DAY) || 'd3');
   const [view, setView] = useState('discover');
   const [soundOn, setSoundOn] = useState(t.soundOn);
   const [undoStack, setUndoStack] = useState([]);
@@ -1130,6 +1130,57 @@ function App() {
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// Day tab strip — scrollable, auto-scrolls active day into view
+// ─────────────────────────────────────────────────────────────
+function DayTabs({ days, activeDay, setActiveDay, compact }) {
+  const scrollRef = useRef(null);
+  const activeRef = useRef(null);
+
+  useEffect(() => {
+    if (activeRef.current && scrollRef.current) {
+      activeRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+  }, [activeDay]);
+
+  return (
+    <div
+      ref={scrollRef}
+      style={{
+        display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2,
+        scrollbarWidth: 'none', msOverflowStyle: 'none',
+        WebkitOverflowScrolling: 'touch',
+      }}
+    >
+      <style>{`.day-scroll::-webkit-scrollbar { display: none; }`}</style>
+      {days.map(d => {
+        const active = d.id === activeDay;
+        const parts = d.label.split(' '); // e.g. ["Sat","Apr","25"] or ["Fri","May","1"]
+        const weekday = parts[0];
+        const monthDay = parts.slice(1).join(' ');
+        return (
+          <button
+            key={d.id}
+            ref={active ? activeRef : null}
+            onClick={() => setActiveDay(d.id)}
+            style={{
+              flex: '0 0 auto', border: 0,
+              padding: '8px 11px', minWidth: 58,
+              background: active ? '#F5F1EA' : 'rgba(255,255,255,0.08)',
+              color: active ? '#0F0E0C' : 'rgba(245,241,234,0.65)',
+              borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
+              transition: 'background 0.15s, color 0.15s',
+            }}
+          >
+            <div style={{ fontSize: 10, fontWeight: 600, opacity: active ? 0.6 : 0.6, textTransform: 'uppercase', letterSpacing: 0.3 }}>{weekday}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, marginTop: 2 }}>{monthDay}</div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // Header pulled inline so we can pass days dynamically
 function HeaderInner({ days, activeDay, setActiveDay, view, setView, scheduledCount, onMenuOpen }) {
   const compact = days.length > 4;
@@ -1168,29 +1219,7 @@ function HeaderInner({ days, activeDay, setActiveDay, view, setView, scheduledCo
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: compact ? 4 : 8, overflowX: 'auto' }}>
-        {days.map(d => {
-          const active = d.id === activeDay;
-          const dayNum = d.label.split(' ').slice(-1)[0];
-          const monAbbrev = d.label.split(' ')[1];
-          return (
-            <button key={d.id} onClick={() => setActiveDay(d.id)} style={{
-              flex: compact ? '0 0 auto' : 1, border: 0,
-              padding: compact ? '8px 10px' : '10px 0',
-              minWidth: compact ? 56 : 'auto',
-              background: active ? '#F5F1EA' : 'rgba(255,255,255,0.08)',
-              color: active ? '#0F0E0C' : 'rgba(245,241,234,0.7)',
-              borderRadius: 10, cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}>
-              <div style={{ fontSize: 11, fontWeight: 500, opacity: 0.7 }}>{d.short}</div>
-              <div style={{ fontSize: compact ? 13 : 15, fontWeight: 700, marginTop: 1 }}>
-                {monAbbrev} {dayNum}
-              </div>
-            </button>
-          );
-        })}
-      </div>
+      <DayTabs days={days} activeDay={activeDay} setActiveDay={setActiveDay} compact={compact} />
     </div>
   );
 }

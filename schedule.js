@@ -32,8 +32,8 @@ const DAYS_FULL = [
   { id: 'd8', date: '2026-05-03', label: 'Sun May 3',  short: 'Sun', weekend: 2 },
 ];
 window.DAYS_FULL = DAYS_FULL;
-// Default: the days the user is here for (Fri 4/24 + Sat 4/25).
-window.DAYS_WEEKEND = DAYS_FULL.filter(d => d.id === 'd2' || d.id === 'd3');
+// Default: this weekend (Sat 4/25 + Sun 4/26).
+window.DAYS_WEEKEND = DAYS_FULL.filter(d => d.id === 'd3' || d.id === 'd4');
 
 window.BANDS_FULL = [
   // ───────── Thu Apr 23 (d1) ─────────
@@ -687,4 +687,4 @@ const isFull = window.SCHEDULE_MODE === 'full';
 window.DAYS = isFull ? window.DAYS_FULL : window.DAYS_WEEKEND;
 window.BANDS = isFull
   ? window.BANDS_FULL
-  : window.BANDS_FULL.filter(b => b.day === 'd2' || b.day === 'd3');
+  : window.BANDS_FULL.filter(b => b.day === 'd3' || b.day === 'd4');
