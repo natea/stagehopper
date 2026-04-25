@@ -426,56 +426,63 @@ function MapViewer({ src, title, onClose }) {
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 150,
-      background: '#000',
+      background: '#111',
       display: 'flex', flexDirection: 'column',
     }}>
-      {/* Toolbar */}
+      {/* Map fills all available space */}
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '12px 16px',
-        paddingTop: 'max(12px, env(safe-area-inset-top, 12px))',
-        background: 'rgba(15,14,12,0.95)',
-        backdropFilter: 'blur(10px)',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
-        flexShrink: 0,
-        zIndex: 10,
-      }}>
-        <span style={{ fontSize: 15, fontWeight: 600, color: '#F5F1EA' }}>{title}</span>
-        <button
-          onClick={onClose}
-          style={{
-            border: 0, background: 'rgba(255,255,255,0.1)', color: '#F5F1EA',
-            width: 32, height: 32, borderRadius: 16,
-            fontSize: 18, cursor: 'pointer', lineHeight: '32px', padding: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >✕</button>
-      </div>
-      {/* Map — scrollable so user can pan; pinch-zoom is browser-native on mobile */}
-      <div style={{
-        flex: 1, overflow: 'auto',
+        flex: 1, overflow: 'auto', position: 'relative',
         WebkitOverflowScrolling: 'touch',
         touchAction: 'pinch-zoom pan-x pan-y',
         cursor: 'grab',
+        paddingTop: 'env(safe-area-inset-top, 0px)',
       }}>
         <img
           src={src}
           alt={title}
           style={{
             display: 'block',
-            width: '200%',   /* wider than screen → horizontal scroll = pan */
+            width: '250%',
             maxWidth: 'none',
             height: 'auto',
           }}
         />
+        {/* Floating title top-left */}
+        <div style={{
+          position: 'fixed',
+          top: 'max(14px, env(safe-area-inset-top, 14px))',
+          left: 16, zIndex: 10,
+          background: 'rgba(15,14,12,0.85)',
+          backdropFilter: 'blur(8px)',
+          color: '#F5F1EA', fontSize: 14, fontWeight: 700,
+          padding: '6px 12px', borderRadius: 8,
+          pointerEvents: 'none',
+        }}>{title}</div>
       </div>
-      <p style={{
-        textAlign: 'center', fontSize: 11,
-        color: 'rgba(245,241,234,0.35)',
-        padding: '8px 0',
-        paddingBottom: 'max(8px, env(safe-area-inset-bottom, 8px))',
+
+      {/* Prominent close bar at bottom */}
+      <div style={{
         flexShrink: 0,
-      }}>Pinch to zoom · drag to pan</p>
+        background: 'rgba(15,14,12,0.96)',
+        backdropFilter: 'blur(12px)',
+        borderTop: '1px solid rgba(255,255,255,0.1)',
+        padding: '10px 16px',
+        paddingBottom: 'max(10px, env(safe-area-inset-bottom, 10px))',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <span style={{ fontSize: 11, color: 'rgba(245,241,234,0.4)' }}>Pinch to zoom · drag to pan</span>
+        <button
+          onClick={onClose}
+          style={{
+            border: 0,
+            background: '#C2410C',
+            color: '#fff',
+            fontSize: 14, fontWeight: 700,
+            padding: '10px 22px', borderRadius: 10,
+            cursor: 'pointer', letterSpacing: 0.2,
+          }}
+        >✕ Close Map</button>
+      </div>
     </div>
   );
 }
@@ -584,42 +591,46 @@ function HamburgerBtn({ onClick }) {
   );
 }
 
+function ViewToggle({ view, setView, scheduledCount }) {
+  return (
+    <div style={{ display: 'flex', gap: 4, padding: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 10 }}>
+      {['discover', 'schedule'].map(v => (
+        <button key={v} onClick={() => setView(v)} style={{
+          border: 0, background: view === v ? '#F5F1EA' : 'transparent',
+          color: view === v ? '#0F0E0C' : 'rgba(245,241,234,0.7)',
+          fontSize: 12, fontWeight: 600, padding: '6px 12px',
+          borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 0.2,
+        }}>
+          {v === 'discover' ? 'Discover' : `Mine · ${scheduledCount}`}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function Header({ activeDay, setActiveDay, view, setView, scheduledCount, onMenuOpen }) {
   return (
     <div style={{
       padding: '0 16px',
-      paddingTop: 'max(16px, env(safe-area-inset-top, 16px))',
+      paddingTop: 'max(14px, env(safe-area-inset-top, 14px))',
       paddingBottom: 0,
       position: 'relative', zIndex: 5,
     }}>
+      {/* Row 1: title + hamburger */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        marginBottom: 12, gap: 8,
+        marginBottom: 8,
       }}>
         <h1 style={{
           margin: 0, color: '#F5F1EA',
           fontFamily: 'Georgia, "Times New Roman", serif',
-          fontSize: 22, fontWeight: 700, letterSpacing: -0.5, flexShrink: 0,
+          fontSize: 20, fontWeight: 700, letterSpacing: -0.5,
         }}>NOLA JazzFest</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{
-            display: 'flex', gap: 4, padding: 3,
-            background: 'rgba(255,255,255,0.08)', borderRadius: 10,
-          }}>
-            {['discover', 'schedule'].map(v => (
-              <button key={v} onClick={() => setView(v)} style={{
-                border: 0, background: view === v ? '#F5F1EA' : 'transparent',
-                color: view === v ? '#0F0E0C' : 'rgba(245,241,234,0.7)',
-                fontSize: 12, fontWeight: 600, padding: '6px 12px',
-                borderRadius: 7, cursor: 'pointer',
-                fontFamily: 'inherit', letterSpacing: 0.2,
-              }}>
-                {v === 'discover' ? 'Discover' : `Mine · ${scheduledCount}`}
-              </button>
-            ))}
-          </div>
-          <HamburgerBtn onClick={onMenuOpen} />
-        </div>
+        <HamburgerBtn onClick={onMenuOpen} />
+      </div>
+      {/* Row 2: view toggle */}
+      <div style={{ marginBottom: 10 }}>
+        <ViewToggle view={view} setView={setView} scheduledCount={scheduledCount} />
       </div>
 
       {/* Day tabs */}
@@ -1187,36 +1198,25 @@ function HeaderInner({ days, activeDay, setActiveDay, view, setView, scheduledCo
   return (
     <div style={{
       padding: '0 16px',
-      paddingTop: 'max(16px, env(safe-area-inset-top, 16px))',
+      paddingTop: 'max(14px, env(safe-area-inset-top, 14px))',
       paddingBottom: 0,
       position: 'relative', zIndex: 5,
     }}>
+      {/* Row 1: title + hamburger */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        marginBottom: 12, gap: 8,
+        marginBottom: 8,
       }}>
         <h1 style={{
           margin: 0, color: '#F5F1EA',
           fontFamily: 'Georgia, "Times New Roman", serif',
-          fontSize: 22, fontWeight: 700, letterSpacing: -0.5, flexShrink: 0,
+          fontSize: 20, fontWeight: 700, letterSpacing: -0.5,
         }}>NOLA JazzFest</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{
-            display: 'flex', gap: 4, padding: 3,
-            background: 'rgba(255,255,255,0.08)', borderRadius: 10,
-          }}>
-            {[['discover','Discover'], ['schedule', `Mine · ${scheduledCount}`]].map(([v, label]) => (
-              <button key={v} onClick={() => setView(v)} style={{
-                border: 0, background: view === v ? '#F5F1EA' : 'transparent',
-                color: view === v ? '#0F0E0C' : 'rgba(245,241,234,0.7)',
-                fontSize: 12, fontWeight: 600, padding: '6px 12px',
-                borderRadius: 7, cursor: 'pointer',
-                fontFamily: 'inherit', letterSpacing: 0.2,
-              }}>{label}</button>
-            ))}
-          </div>
-          <HamburgerBtn onClick={onMenuOpen} />
-        </div>
+        <HamburgerBtn onClick={onMenuOpen} />
+      </div>
+      {/* Row 2: view toggle */}
+      <div style={{ marginBottom: 10 }}>
+        <ViewToggle view={view} setView={setView} scheduledCount={scheduledCount} />
       </div>
 
       <DayTabs days={days} activeDay={activeDay} setActiveDay={setActiveDay} compact={compact} />
