@@ -1296,28 +1296,32 @@ function App() {
     }
 
     // ── Timeslot-gated mode (default) ─────────────────────────
+    // Walk ALL slots in order. Skip only when user has chosen ≥1 band
+    // from that slot (slot done) or all bands in it are rejected.
+    // "You're all set" only appears when every slot is truly done.
+    // Clock time (today only) adds a NOW/NEXT label — it never gates progress.
     const slots = [...new Set(allDay.map(b => b.start))].sort();
-    const dayDate = DAY_BY_ID[activeDay]?.date;
-    if (dayDate === todayDate()) {
-      const { slot, label } = getTargetSlot(activeDay, allDay, scheduledIds);
-      if (slot) {
-        const slotBands = allDay.filter(b => b.start === slot);
-        const remaining = slotBands.filter(b => !scheduledIds.has(b.id) && !rejectedIds.has(b.id));
-        return {
-          deck: remaining,
-          slotContext: { label, time: fmtTime(slot), total: slotBands.length, slotIdx: slots.indexOf(slot), totalSlots: slots.length },
-        };
-      }
-    }
+    const isToday = DAY_BY_ID[activeDay]?.date === todayDate();
+    const now = isToday ? nowMinutes() : -1;
+
+    const slotLabel = (slot) => {
+      if (!isToday) return null;
+      const sMin = toMin(slot);
+      const maxEnd = Math.max(...allDay.filter(b => b.start === slot).map(b => toMin(b.end)));
+      if (sMin <= now && now < maxEnd) return 'NOW';
+      if (sMin > now) return 'NEXT';
+      return null; // past slot
+    };
+
     for (let i = 0; i < slots.length; i++) {
       const slot = slots[i];
       const slotBands = allDay.filter(b => b.start === slot);
-      if (slotBands.some(b => scheduledIds.has(b.id))) continue;
+      if (slotBands.some(b => scheduledIds.has(b.id))) continue; // chosen → slot done
       const pending = slotBands.filter(b => !scheduledIds.has(b.id) && !rejectedIds.has(b.id));
-      if (pending.length === 0) continue;
+      if (pending.length === 0) continue; // all rejected → slot done
       return {
         deck: pending,
-        slotContext: { label: null, time: fmtTime(slot), total: slotBands.length, slotIdx: i, totalSlots: slots.length },
+        slotContext: { label: slotLabel(slot), time: fmtTime(slot), total: slotBands.length, slotIdx: i, totalSlots: slots.length },
       };
     }
     return { deck: [], slotContext: null };
