@@ -854,13 +854,13 @@ function MineBandSheet({ band, conflictingBands, onClose, onRemove, onRemoveConf
 
   return (
     <div style={{
-      position: 'absolute', inset: 0, zIndex: 110,
+      position: 'fixed', inset: 0, zIndex: 110,
       background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)',
       display: 'flex', alignItems: 'flex-end',
     }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
         background: '#1A1816', borderRadius: '20px 20px 0 0',
-        width: '100%', maxHeight: '92vh',
+        width: '100%', maxHeight: '88vh',
         display: 'flex', flexDirection: 'column',
         boxShadow: '0 -8px 40px rgba(0,0,0,0.6)',
         overflow: 'hidden',
@@ -979,25 +979,56 @@ function MineBandSheet({ band, conflictingBands, onClose, onRemove, onRemoveConf
 }
 
 // ─────────────────────────────────────────────────────────────
-// Schedule timeline view
+// Schedule timeline view — stage columns
 // ─────────────────────────────────────────────────────────────
+
+// Abbreviated stage names for column headers
+const STAGE_ABBREV = {
+  festival: 'Festival', shell: 'Gentilly', congo: 'Congo Sq', jazz: 'Jazz',
+  blues: 'Blues', economy: 'Economy', fais: 'Fais Do-Do', heritage: 'Heritage',
+  gospel: 'Gospel', lagniappe: 'Lagniappe', jamaica: 'Jamaica', rhythm: 'Rhythm',
+  children: "Children's", miner: 'A. Miner',
+};
+
+// For each conflict cluster, pick the "top pick" — fewest conflicts, then canonical stage order.
+function computeTopPicks(dayBands) {
+  const stageOrder = Object.fromEntries(window.STAGES.map((s, i) => [s.id, i]));
+  const topPicks = new Set();
+  const visited = new Set();
+
+  for (const band of dayBands) {
+    if (visited.has(band.id)) continue;
+    const cluster = [];
+    const queue = [band];
+    while (queue.length) {
+      const b = queue.shift();
+      if (visited.has(b.id)) continue;
+      visited.add(b.id);
+      cluster.push(b);
+      for (const other of dayBands) {
+        if (!visited.has(other.id) && overlap(b, other)) queue.push(other);
+      }
+    }
+    if (cluster.length === 1) {
+      topPicks.add(cluster[0].id);
+    } else {
+      const sorted = [...cluster].sort((a, b) => {
+        const aC = cluster.filter(o => o.id !== a.id && overlap(o, a)).length;
+        const bC = cluster.filter(o => o.id !== b.id && overlap(o, b)).length;
+        return aC !== bC ? aC - bC : stageOrder[a.stage] - stageOrder[b.stage];
+      });
+      topPicks.add(sorted[0].id);
+    }
+  }
+  return topPicks;
+}
+
 function ScheduleView({ scheduled, activeDay, onRemove }) {
   const [previewBand, setPreviewBand] = useState(null);
 
   const dayBands = scheduled
     .filter(b => b.day === activeDay)
     .sort((a, b) => toMin(a.start) - toMin(b.start));
-
-  // detect conflicts within the day
-  const conflictIds = new Set();
-  for (let i = 0; i < dayBands.length; i++) {
-    for (let j = i + 1; j < dayBands.length; j++) {
-      if (overlap(dayBands[i], dayBands[j])) {
-        conflictIds.add(dayBands[i].id);
-        conflictIds.add(dayBands[j].id);
-      }
-    }
-  }
 
   if (dayBands.length === 0) {
     return (
@@ -1016,84 +1047,145 @@ function ScheduleView({ scheduled, activeDay, onRemove }) {
     );
   }
 
-  // Hour grid — dynamic range based on actual show times
+  const topPicks = computeTopPicks(dayBands);
+
+  const conflictIds = new Set();
+  for (let i = 0; i < dayBands.length; i++)
+    for (let j = i + 1; j < dayBands.length; j++)
+      if (overlap(dayBands[i], dayBands[j])) {
+        conflictIds.add(dayBands[i].id);
+        conflictIds.add(dayBands[j].id);
+      }
+
   const startH = Math.max(11, Math.min(...dayBands.map(b => Math.floor(toMin(b.start) / 60))));
   const endH   = Math.min(22, Math.max(...dayBands.map(b => Math.ceil(toMin(b.end) / 60))));
-  const pxPerHour = 80;
-  const { lanes, numLanes } = computeLanes(dayBands);
+  const pxPerHour = 64;
+  const totalH = (endH - startH) * pxPerHour;
+
+  // Only show columns for stages that have picked acts today, in canonical order
+  const activeStages = window.STAGES.filter(s => dayBands.some(b => b.stage === s.id));
+  const stageColIdx = Object.fromEntries(activeStages.map((s, i) => [s.id, i]));
+  const colW = 72;
+  const timeAxisW = 40;
+  const totalW = timeAxisW + activeStages.length * colW;
+
   const conflictsOf = (b) => dayBands.filter(o => o.id !== b.id && overlap(o, b));
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', position: 'relative', padding: '12px 16px 100px' }}>
-      {/* conflict summary banner */}
-      {conflictIds.size > 0 && (
-        <div style={{
-          background: 'rgba(220, 80, 70, 0.14)', border: '1px solid rgba(220, 80, 70, 0.4)',
-          color: '#FFB4A8', borderRadius: 10, padding: '8px 12px', fontSize: 12, marginBottom: 12, lineHeight: 1.35,
-        }}>
-          <b>⚠ Conflicts detected.</b> Tap a set to review and resolve.
-        </div>
-      )}
+    <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto', position: 'relative' }}>
+      <div style={{ minWidth: totalW, paddingBottom: 100 }}>
 
-      {conflictIds.size === 0 && dayBands.length > 0 && (
-        <div style={{
-          background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)',
-          color: '#86EFAC', borderRadius: 10, padding: '8px 12px', fontSize: 12, marginBottom: 12,
-        }}>
-          ✓ {dayBands.length} set{dayBands.length !== 1 ? 's' : ''} — no conflicts. Tap any set to preview or remove.
-        </div>
-      )}
+        {/* Status banner */}
+        {conflictIds.size > 0 ? (
+          <div style={{
+            margin: '8px 10px 0', background: 'rgba(220,80,70,0.12)',
+            border: '1px solid rgba(220,80,70,0.35)', color: '#FFB4A8',
+            borderRadius: 8, padding: '6px 10px', fontSize: 11, lineHeight: 1.4,
+          }}>
+            <b>⚠ Conflicts.</b> Top picks are bright — tap a dimmed show to resolve.
+          </div>
+        ) : (
+          <div style={{
+            margin: '8px 10px 0', background: 'rgba(74,222,128,0.07)',
+            border: '1px solid rgba(74,222,128,0.18)', color: '#86EFAC',
+            borderRadius: 8, padding: '6px 10px', fontSize: 11,
+          }}>
+            ✓ {dayBands.length} set{dayBands.length !== 1 ? 's' : ''} — no conflicts
+          </div>
+        )}
 
-      <div style={{ position: 'relative', height: (endH - startH) * pxPerHour, marginLeft: 46 }}>
-        {/* Hour lines */}
-        {Array.from({ length: endH - startH + 1 }, (_, i) => {
-          const h = startH + i;
-          const h12 = ((h + 11) % 12) + 1;
-          const ap = h >= 12 ? 'PM' : 'AM';
-          return (
-            <div key={h} style={{ position: 'absolute', left: 0, right: 0, top: i * pxPerHour }}>
-              <div style={{
-                position: 'absolute', left: -46, top: -7, width: 40, textAlign: 'right',
-                fontSize: 10, fontWeight: 600, letterSpacing: 0.3,
-                color: 'rgba(245,241,234,0.4)', fontVariantNumeric: 'tabular-nums',
-              }}>{h12} {ap}</div>
-              <div style={{ height: 1, background: 'rgba(245,241,234,0.08)' }} />
+        {/* Stage header — sticky, scrolls horizontally with content */}
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 20,
+          display: 'flex', marginLeft: timeAxisW,
+          background: '#111109', borderBottom: '1px solid rgba(255,255,255,0.07)',
+          marginTop: 8,
+        }}>
+          {activeStages.map(s => (
+            <div key={s.id} style={{
+              width: colW, flexShrink: 0,
+              padding: '5px 3px 5px',
+              fontSize: 9, fontWeight: 800, textAlign: 'center',
+              color: s.tone, textTransform: 'uppercase', letterSpacing: 0.4,
+              borderLeft: `1px solid rgba(255,255,255,0.06)`,
+              lineHeight: 1.2,
+            }}>
+              {STAGE_ABBREV[s.id] || s.name}
             </div>
-          );
-        })}
+          ))}
+        </div>
 
-        {/* Events — lanes computed by computeLanes (same stage = same lane for back-to-back) */}
-        {dayBands.map(b => {
-          const stage = STAGE_BY_ID[b.stage];
-          const topPx = (toMin(b.start) - startH * 60) / 60 * pxPerHour;
-          const heightPx = (toMin(b.end) - toMin(b.start)) / 60 * pxPerHour;
-          const isConflict = conflictIds.has(b.id);
-          const laneIdx = lanes.get(b.id) ?? 0;
-          const laneW = 100 / numLanes;
-          return (
-            <div key={b.id}
-              onClick={() => setPreviewBand(b)}
-              style={{
-                position: 'absolute',
-                top: topPx, height: Math.max(heightPx - 4, 36),
-                left: `${laneIdx * laneW}%`,
-                width: `calc(${laneW}% - 4px)`,
-                background: isConflict ? `${stage.tone}cc` : stage.tone,
-                border: isConflict ? '2px solid #FF6B6B' : '2px solid transparent',
-                borderRadius: 8, padding: '5px 8px',
-                color: '#fff', cursor: 'pointer',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
-                overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 1,
-                boxSizing: 'border-box',
-              }}>
-              {isConflict && <div style={{ fontSize: 9, fontWeight: 800, color: '#FF6B6B', letterSpacing: 0.5 }}>⚠ CONFLICT</div>}
-              <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</div>
-              <div style={{ fontSize: 9, opacity: 0.85, fontVariantNumeric: 'tabular-nums' }}>
-                {fmtTimeShort(b.start)}–{fmtTimeShort(b.end)}
+        {/* Timeline grid */}
+        <div style={{ position: 'relative', height: totalH, marginLeft: timeAxisW }}>
+
+          {/* Hour lines + time labels */}
+          {Array.from({ length: endH - startH + 1 }, (_, i) => {
+            const h = startH + i;
+            const h12 = ((h + 11) % 12) + 1;
+            const ap = h >= 12 ? 'p' : 'a';
+            return (
+              <div key={h} style={{ position: 'absolute', left: 0, right: 0, top: i * pxPerHour }}>
+                <div style={{
+                  position: 'absolute', left: -timeAxisW, top: -7,
+                  width: timeAxisW - 4, textAlign: 'right',
+                  fontSize: 9, fontWeight: 600, color: 'rgba(245,241,234,0.35)',
+                  fontVariantNumeric: 'tabular-nums',
+                }}>{h12}{ap}</div>
+                <div style={{ height: 1, background: 'rgba(245,241,234,0.07)' }} />
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+
+          {/* Column dividers */}
+          {activeStages.map((s, i) => (
+            <div key={s.id} style={{
+              position: 'absolute', top: 0, bottom: 0,
+              left: i * colW, width: 1,
+              background: 'rgba(255,255,255,0.05)',
+            }} />
+          ))}
+
+          {/* Event blocks */}
+          {dayBands.map(b => {
+            const stage = STAGE_BY_ID[b.stage];
+            const colIdx = stageColIdx[b.stage] ?? 0;
+            const topPx = (toMin(b.start) - startH * 60) / 60 * pxPerHour;
+            const heightPx = Math.max((toMin(b.end) - toMin(b.start)) / 60 * pxPerHour - 3, 28);
+            const isTop = topPicks.has(b.id);
+            const isConflict = conflictIds.has(b.id);
+
+            return (
+              <div key={b.id}
+                onClick={() => setPreviewBand(b)}
+                style={{
+                  position: 'absolute',
+                  top: topPx, height: heightPx,
+                  left: colIdx * colW + 2,
+                  width: colW - 5,
+                  background: isTop ? `${stage.tone}e0` : `${stage.tone}28`,
+                  border: isTop ? `1px solid ${stage.tone}` : `1px dashed ${stage.tone}66`,
+                  borderRadius: 6, padding: '3px 5px',
+                  color: isTop ? '#fff' : 'rgba(255,255,255,0.4)',
+                  cursor: 'pointer', overflow: 'hidden',
+                  display: 'flex', flexDirection: 'column', gap: 1,
+                  boxSizing: 'border-box',
+                }}>
+                {isTop && isConflict && (
+                  <div style={{ fontSize: 7, fontWeight: 900, color: '#FCD34D', letterSpacing: 0.5, lineHeight: 1 }}>★ TOP</div>
+                )}
+                <div style={{
+                  fontSize: 10, fontWeight: 700, lineHeight: 1.2,
+                  display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                }}>
+                  {b.name}
+                </div>
+                <div style={{ fontSize: 8, opacity: 0.85, fontVariantNumeric: 'tabular-nums', marginTop: 'auto' }}>
+                  {fmtTimeShort(b.start)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Preview sheet */}
