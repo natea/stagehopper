@@ -33,6 +33,89 @@ const overlap = (a, b) => {
 const conflictsWith = (band, scheduled) =>
   scheduled.filter(s => s.id !== band.id && overlap(band, s));
 
+// ── Time / slot helpers ──────────────────────────────────────
+const nowMinutes = () => {
+  const d = new Date();
+  return d.getHours() * 60 + d.getMinutes();
+};
+
+const todayDate = () => new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+
+// Greedy lane algorithm: same-stage consecutive shows share a lane.
+function computeLanes(dayBands) {
+  const sorted = [...dayBands].sort((a, b) => toMin(a.start) - toMin(b.start));
+  const laneEnd   = []; // end-minutes of last show in each lane
+  const laneStage = []; // stage id of last show in each lane
+  const lanes = new Map();
+
+  for (const band of sorted) {
+    const s = toMin(band.start), e = toMin(band.end);
+    let best = -1;
+    // Prefer same stage (consecutive)
+    for (let i = 0; i < laneEnd.length; i++) {
+      if (laneStage[i] === band.stage && laneEnd[i] <= s) { best = i; break; }
+    }
+    // Any open lane
+    if (best === -1) {
+      for (let i = 0; i < laneEnd.length; i++) {
+        if (laneEnd[i] <= s) { best = i; break; }
+      }
+    }
+    // New lane
+    if (best === -1) { best = laneEnd.length; laneEnd.push(0); laneStage.push(null); }
+    laneEnd[best] = e;
+    laneStage[best] = band.stage;
+    lanes.set(band.id, best);
+  }
+  return { lanes, numLanes: Math.max(laneEnd.length, 1) };
+}
+
+// Returns { slot: 'HH:MM' | null, label: 'NOW' | 'NEXT' | null }
+function getTargetSlot(dayId, allDayBands, scheduledIds) {
+  const day = DAY_BY_ID[dayId];
+  if (!day || day.date !== todayDate()) return { slot: null, label: null };
+  const now = nowMinutes();
+  const sorted = [...allDayBands].sort((a, b) => toMin(a.start) - toMin(b.start));
+
+  // Currently playing bands
+  const playing = sorted.filter(b => toMin(b.start) <= now && now < toMin(b.end));
+  if (playing.length > 0) {
+    const slotStart = playing[0].start;
+    const hasChosen = playing.some(b => scheduledIds.has(b.id));
+    if (!hasChosen) return { slot: slotStart, label: 'NOW' };
+    // Already chose one from this slot → find next distinct start time
+    const nextStart = sorted.find(b => toMin(b.start) > now);
+    return nextStart ? { slot: nextStart.start, label: 'NEXT' } : { slot: null, label: null };
+  }
+  // Between slots or before festival
+  const next = sorted.find(b => toMin(b.start) > now);
+  return next ? { slot: next.start, label: 'NEXT' } : { slot: null, label: null };
+}
+
+// Schedule local Notification API alerts (15-min warning) for today's shows.
+function scheduleLocalNotifications(scheduledBands) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const today = todayDate();
+  for (const band of scheduledBands) {
+    const day = DAY_BY_ID[band.day];
+    if (!day || day.date !== today) continue;
+    const [h, m] = band.start.split(':').map(Number);
+    const showMs = new Date(day.date + 'T00:00:00').getTime() + (h * 60 + m) * 60000;
+    const alertMs = showMs - 15 * 60000;
+    const delay = alertMs - Date.now();
+    if (delay > 0 && delay < 6 * 3600000) { // only within 6 hours
+      setTimeout(() => {
+        new Notification(`Starting soon: ${band.name}`, {
+          body: `${fmtTime(band.start)} · ${STAGE_BY_ID[band.stage]?.name}`,
+          icon: 'icon-192.png',
+          tag: `jf26-${band.id}`,
+          silent: false,
+        });
+      }, delay);
+    }
+  }
+}
+
 // LocalStorage keys
 const LS_KEY = 'jf26.schedule.v3';
 const LS_REJECT = 'jf26.rejected.v3';
@@ -680,9 +763,85 @@ function Header({ activeDay, setActiveDay, view, setView, scheduledCount, onMenu
 }
 
 // ─────────────────────────────────────────────────────────────
+// Mine: band detail sheet (tap a timeline block to preview)
+// ─────────────────────────────────────────────────────────────
+function MineBandSheet({ band, conflictingBands, onClose, onRemove, onRemoveConflict }) {
+  if (!band) return null;
+  const stage = STAGE_BY_ID[band.stage];
+  const day = DAY_BY_ID[band.day];
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 110,
+      background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)',
+      display: 'flex', alignItems: 'flex-end',
+    }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: '#1A1816', borderRadius: '20px 20px 0 0',
+        padding: '20px 20px 32px', width: '100%', boxSizing: 'border-box',
+        boxShadow: '0 -8px 32px rgba(0,0,0,0.5)',
+      }}>
+        <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(245,241,234,0.2)', margin: '0 auto 18px' }} />
+
+        {/* Band info */}
+        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', marginBottom: 16 }}>
+          <div style={{ width: 52, height: 52, borderRadius: 10, background: stage.tone, flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'Georgia, serif', color: '#F5F1EA', marginBottom: 3 }}>{band.name}</div>
+            <div style={{ fontSize: 12, color: 'rgba(245,241,234,0.6)' }}>{day?.label} · {fmtTime(band.start)}–{fmtTime(band.end)}</div>
+            <div style={{ fontSize: 11, color: stage.tone, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 3 }}>{stage.name}</div>
+          </div>
+        </div>
+
+        {/* Conflict warning */}
+        {conflictingBands.length > 0 && (
+          <div style={{
+            background: 'rgba(220,80,70,0.12)', border: '1px solid rgba(220,80,70,0.3)',
+            borderRadius: 10, padding: '10px 12px', marginBottom: 14,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#FFB4A8', marginBottom: 8 }}>
+              ⚠ Conflicts with {conflictingBands.length === 1 ? 'another band' : `${conflictingBands.length} bands`} on your schedule:
+            </div>
+            {conflictingBands.map(c => {
+              const cs = STAGE_BY_ID[c.stage];
+              return (
+                <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <div>
+                    <span style={{ fontSize: 13, color: '#F5F1EA', fontWeight: 600 }}>{c.name}</span>
+                    <span style={{ fontSize: 11, color: 'rgba(245,241,234,0.5)', marginLeft: 8 }}>{fmtTimeShort(c.start)}–{fmtTimeShort(c.end)} · {cs.name}</span>
+                  </div>
+                  <button onClick={() => { onRemoveConflict(c); onClose(); }} style={{
+                    border: 0, background: 'rgba(220,80,70,0.25)', color: '#FFB4A8',
+                    fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+                  }}>Drop it</button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onClose} style={{
+            flex: 1, padding: '13px 0', border: '1px solid rgba(245,241,234,0.15)',
+            background: 'transparent', color: '#F5F1EA',
+            fontSize: 14, fontWeight: 600, borderRadius: 12, cursor: 'pointer',
+          }}>Close</button>
+          <button onClick={() => { onRemove(band); onClose(); }} style={{
+            flex: 1, padding: '13px 0', border: 0,
+            background: 'rgba(220,80,70,0.2)', color: '#FFB4A8',
+            fontSize: 14, fontWeight: 600, borderRadius: 12, cursor: 'pointer',
+          }}>Remove from schedule</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // Schedule timeline view
 // ─────────────────────────────────────────────────────────────
 function ScheduleView({ scheduled, activeDay, onRemove }) {
+  const [previewBand, setPreviewBand] = useState(null);
+
   const dayBands = scheduled
     .filter(b => b.day === activeDay)
     .sort((a, b) => toMin(a.start) - toMin(b.start));
@@ -715,46 +874,45 @@ function ScheduleView({ scheduled, activeDay, onRemove }) {
     );
   }
 
-  // Hour grid 11 AM – 8 PM
-  const startH = 11, endH = 20;
-  const pxPerHour = 76;
+  // Hour grid — dynamic range based on actual show times
+  const startH = Math.max(11, Math.min(...dayBands.map(b => Math.floor(toMin(b.start) / 60))));
+  const endH   = Math.min(22, Math.max(...dayBands.map(b => Math.ceil(toMin(b.end) / 60))));
+  const pxPerHour = 80;
+  const { lanes, numLanes } = computeLanes(dayBands);
+  const conflictsOf = (b) => dayBands.filter(o => o.id !== b.id && overlap(o, b));
 
   return (
-    <div style={{
-      flex: 1, overflowY: 'auto', position: 'relative',
-      padding: '12px 16px 100px',
-    }}>
-      {/* conflict summary */}
+    <div style={{ flex: 1, overflowY: 'auto', position: 'relative', padding: '12px 16px 100px' }}>
+      {/* conflict summary banner */}
       {conflictIds.size > 0 && (
         <div style={{
-          background: 'rgba(220, 80, 70, 0.14)',
-          border: '1px solid rgba(220, 80, 70, 0.4)',
-          color: '#FFB4A8',
-          borderRadius: 10, padding: '8px 12px',
-          fontSize: 12, marginBottom: 12, lineHeight: 1.35,
+          background: 'rgba(220, 80, 70, 0.14)', border: '1px solid rgba(220, 80, 70, 0.4)',
+          color: '#FFB4A8', borderRadius: 10, padding: '8px 12px', fontSize: 12, marginBottom: 12, lineHeight: 1.35,
         }}>
-          <b>⚠ {conflictIds.size / 2 | 0 || 1} conflict{conflictIds.size > 2 ? 's' : ''} on this day.</b> Tap a set to drop it.
+          <b>⚠ Conflicts detected.</b> Tap a set to review and resolve.
         </div>
       )}
 
-      <div style={{
-        position: 'relative',
-        height: (endH - startH) * pxPerHour,
-        marginLeft: 42,
-      }}>
-        {/* hour lines */}
+      {conflictIds.size === 0 && dayBands.length > 0 && (
+        <div style={{
+          background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)',
+          color: '#86EFAC', borderRadius: 10, padding: '8px 12px', fontSize: 12, marginBottom: 12,
+        }}>
+          ✓ {dayBands.length} set{dayBands.length !== 1 ? 's' : ''} — no conflicts. Tap any set to preview or remove.
+        </div>
+      )}
+
+      <div style={{ position: 'relative', height: (endH - startH) * pxPerHour, marginLeft: 46 }}>
+        {/* Hour lines */}
         {Array.from({ length: endH - startH + 1 }, (_, i) => {
           const h = startH + i;
-          const ap = h >= 12 ? 'PM' : 'AM';
           const h12 = ((h + 11) % 12) + 1;
+          const ap = h >= 12 ? 'PM' : 'AM';
           return (
-            <div key={h} style={{
-              position: 'absolute', left: 0, right: 0,
-              top: i * pxPerHour,
-            }}>
+            <div key={h} style={{ position: 'absolute', left: 0, right: 0, top: i * pxPerHour }}>
               <div style={{
-                position: 'absolute', left: -42, top: -7, width: 38, textAlign: 'right',
-                fontSize: 10, fontWeight: 600, letterSpacing: 0.4,
+                position: 'absolute', left: -46, top: -7, width: 40, textAlign: 'right',
+                fontSize: 10, fontWeight: 600, letterSpacing: 0.3,
                 color: 'rgba(245,241,234,0.4)', fontVariantNumeric: 'tabular-nums',
               }}>{h12} {ap}</div>
               <div style={{ height: 1, background: 'rgba(245,241,234,0.08)' }} />
@@ -762,45 +920,50 @@ function ScheduleView({ scheduled, activeDay, onRemove }) {
           );
         })}
 
-        {/* events */}
+        {/* Events — lanes computed by computeLanes (same stage = same lane for back-to-back) */}
         {dayBands.map(b => {
           const stage = STAGE_BY_ID[b.stage];
-          const top = (toMin(b.start) - startH * 60) / 60 * pxPerHour;
-          const height = (toMin(b.end) - toMin(b.start)) / 60 * pxPerHour;
+          const topPx = (toMin(b.start) - startH * 60) / 60 * pxPerHour;
+          const heightPx = (toMin(b.end) - toMin(b.start)) / 60 * pxPerHour;
           const isConflict = conflictIds.has(b.id);
-          // figure out lateral offset for stacking conflicts
-          const laneIdx = dayBands
-            .filter(o => o.id !== b.id && overlap(o, b) && toMin(o.start) <= toMin(b.start))
-            .length;
+          const laneIdx = lanes.get(b.id) ?? 0;
+          const laneW = 100 / numLanes;
           return (
             <div key={b.id}
-              onClick={() => onRemove(b)}
+              onClick={() => setPreviewBand(b)}
               style={{
                 position: 'absolute',
-                top, height: Math.max(height - 3, 38),
-                left: `${laneIdx * 8}px`,
-                right: `${4 - laneIdx * 4}px`,
-                background: stage.tone,
-                borderLeft: isConflict ? '4px solid #FF6B6B' : `4px solid ${stage.tone}`,
-                borderRadius: 8, padding: '6px 10px',
+                top: topPx, height: Math.max(heightPx - 4, 36),
+                left: `${laneIdx * laneW}%`,
+                width: `calc(${laneW}% - 4px)`,
+                background: isConflict ? `${stage.tone}cc` : stage.tone,
+                border: isConflict ? '2px solid #FF6B6B' : '2px solid transparent',
+                borderRadius: 8, padding: '5px 8px',
                 color: '#fff', cursor: 'pointer',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
-                overflow: 'hidden', display: 'flex', flexDirection: 'column',
-                gap: 1,
+                boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 1,
+                boxSizing: 'border-box',
               }}>
-              <div style={{
-                fontSize: 13, fontWeight: 700, lineHeight: 1.15,
-                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-              }}>{b.name}</div>
-              <div style={{
-                fontSize: 10, opacity: 0.85, fontVariantNumeric: 'tabular-nums',
-              }}>
-                {fmtTimeShort(b.start)}–{fmtTimeShort(b.end)} · {stage.name}
+              {isConflict && <div style={{ fontSize: 9, fontWeight: 800, color: '#FF6B6B', letterSpacing: 0.5 }}>⚠ CONFLICT</div>}
+              <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</div>
+              <div style={{ fontSize: 9, opacity: 0.85, fontVariantNumeric: 'tabular-nums' }}>
+                {fmtTimeShort(b.start)}–{fmtTimeShort(b.end)}
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* Preview sheet */}
+      {previewBand && (
+        <MineBandSheet
+          band={previewBand}
+          conflictingBands={conflictsOf(previewBand)}
+          onClose={() => setPreviewBand(null)}
+          onRemove={(b) => { onRemove(b); setPreviewBand(null); }}
+          onRemoveConflict={(b) => { onRemove(b); }}
+        />
+      )}
     </div>
   );
 }
@@ -808,7 +971,41 @@ function ScheduleView({ scheduled, activeDay, onRemove }) {
 // ─────────────────────────────────────────────────────────────
 // Discover (swipe stack) view
 // ─────────────────────────────────────────────────────────────
-function DiscoverView({ deck, onSwipe, onUndo, undoStack, scheduled, soundOn, setSoundOn }) {
+function SlotBanner({ ctx }) {
+  if (!ctx) return null;
+  const labelColor = ctx.label === 'NOW' ? '#4ADE80' : ctx.label === 'NEXT' ? '#FACC15' : 'rgba(245,241,234,0.5)';
+  const dots = Array.from({ length: ctx.totalSlots }, (_, i) => i);
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '6px 20px 4px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {ctx.label && (
+          <span style={{
+            fontSize: 10, fontWeight: 800, letterSpacing: 1,
+            color: labelColor, textTransform: 'uppercase',
+          }}>{ctx.label}</span>
+        )}
+        <span style={{ fontSize: 12, fontWeight: 600, color: '#F5F1EA' }}>{ctx.time}</span>
+        <span style={{ fontSize: 11, color: 'rgba(245,241,234,0.45)' }}>· {ctx.total} sets</span>
+      </div>
+      {/* Slot progress dots */}
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        {dots.map(i => (
+          <div key={i} style={{
+            width: i === ctx.slotIdx ? 12 : 5,
+            height: 5, borderRadius: 3,
+            background: i === ctx.slotIdx ? '#F5F1EA' : i < ctx.slotIdx ? 'rgba(245,241,234,0.35)' : 'rgba(245,241,234,0.12)',
+            transition: 'all 0.2s',
+          }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DiscoverView({ deck, slotContext, onSwipe, onUndo, undoStack, scheduled, soundOn, setSoundOn }) {
   if (deck.length === 0) {
     return (
       <div style={{
@@ -818,10 +1015,10 @@ function DiscoverView({ deck, onSwipe, onUndo, undoStack, scheduled, soundOn, se
         <div>
           <div style={{ fontSize: 40, marginBottom: 8 }}>🎺</div>
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4, color: '#F5F1EA' }}>
-            That's everyone for this day.
+            You're all set for this day.
           </div>
           <div style={{ fontSize: 13 }}>
-            Tap "Mine" to see your schedule, or pick another day.
+            Tap "Mine" to review your schedule.
           </div>
           {undoStack.length > 0 && (
             <button onClick={onUndo} style={{
@@ -835,13 +1032,13 @@ function DiscoverView({ deck, onSwipe, onUndo, undoStack, scheduled, soundOn, se
       </div>
     );
   }
-  // stack: render top + 1 below
   const top = deck[0];
   const below = deck[1];
   return (
     <div style={{
       flex: 1, position: 'relative', display: 'flex', flexDirection: 'column',
     }}>
+      <SlotBanner ctx={slotContext} />
       <div style={{ flex: 1, position: 'relative' }}>
         {below && (
           <BandCard
@@ -999,12 +1196,44 @@ function App() {
     [bands, scheduledIds]
   );
 
-  const deck = useMemo(() => {
-    return bands.filter(b =>
-      b.day === activeDay &&
-      !scheduledIds.has(b.id) &&
-      !rejectedIds.has(b.id)
-    );
+  // ── Timeslot-gated deck ──────────────────────────────────────
+  // Only show cards for one timeslot at a time. Advance when user
+  // has chosen ≥1 from the current slot (or all were swiped away).
+  const { deck, slotContext } = useMemo(() => {
+    const allDay = bands.filter(b => b.day === activeDay);
+    const slots = [...new Set(allDay.map(b => b.start))].sort();
+
+    // For today, getTargetSlot() respects real clock + chosen-check.
+    let activeSlot = null;
+    const dayDate = DAY_BY_ID[activeDay]?.date;
+    if (dayDate === todayDate()) {
+      const { slot, label } = getTargetSlot(activeDay, allDay, scheduledIds);
+      if (slot) {
+        activeSlot = slot;
+        const slotBands = allDay.filter(b => b.start === slot);
+        const remaining = slotBands.filter(b => !scheduledIds.has(b.id) && !rejectedIds.has(b.id));
+        return {
+          deck: remaining,
+          slotContext: { label, time: fmtTime(slot), total: slotBands.length, slotIdx: slots.indexOf(slot), totalSlots: slots.length },
+        };
+      }
+    }
+
+    // Non-today (or today before/after festival hours): walk slots in order,
+    // find first with pending cards and no chosen band yet.
+    for (let i = 0; i < slots.length; i++) {
+      const slot = slots[i];
+      const slotBands = allDay.filter(b => b.start === slot);
+      const hasChosen = slotBands.some(b => scheduledIds.has(b.id));
+      if (hasChosen) continue; // slot done — advance
+      const pending = slotBands.filter(b => !scheduledIds.has(b.id) && !rejectedIds.has(b.id));
+      if (pending.length === 0) continue; // all rejected — advance
+      return {
+        deck: pending,
+        slotContext: { label: null, time: fmtTime(slot), total: slotBands.length, slotIdx: i, totalSlots: slots.length },
+      };
+    }
+    return { deck: [], slotContext: null };
   }, [bands, activeDay, scheduledIds, rejectedIds]);
 
   const handleSwipe = useCallback((band, dir) => {
@@ -1059,10 +1288,22 @@ function App() {
   };
 
   const handleRemove = (band) => {
-    if (confirm(`Drop ${band.name} from your schedule?`)) {
-      setScheduledIds(s => { const n = new Set(s); n.delete(band.id); return n; });
-    }
+    setScheduledIds(s => { const n = new Set(s); n.delete(band.id); return n; });
   };
+
+  // ── Notifications ─────────────────────────────────────────────
+  // Request permission when user opens Mine tab, then (re)schedule alerts.
+  useEffect(() => {
+    if (view !== 'schedule') return;
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().then(p => {
+        if (p === 'granted') scheduleLocalNotifications(scheduledBands);
+      });
+    } else if (Notification.permission === 'granted') {
+      scheduleLocalNotifications(scheduledBands);
+    }
+  }, [view, scheduledBands]);
 
   // Provide days/active-day to Header — hack: temporarily override window.DAYS for Header
   const headerDays = days;
@@ -1087,6 +1328,7 @@ function App() {
       {view === 'discover' ? (
         <DiscoverView
           deck={deck}
+          slotContext={slotContext}
           onSwipe={handleSwipe}
           onUndo={handleUndo}
           undoStack={undoStack}
