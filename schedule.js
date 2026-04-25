@@ -219,7 +219,7 @@ window.BANDS_FULL = [
   { id: 'b176', name: "James Rivers Movement"                                     , day: 'd3', stage: 'jazz',       start: '14:10', end: '15:10', yt: 'BEG2xWDnSkY', verified: true },
   { id: 'b177', name: "John Boutté"                                               , day: 'd3', stage: 'jazz',       start: '15:35', end: '16:45', yt: 'PWcKhqZ5R5Q', verified: true },
   { id: 'b178', name: "Dave Koz & Friends Summer Horns"                           , day: 'd3', stage: 'jazz',       start: '17:20', end: '18:50', yt: 'wN7qjHrb6Nw', verified: true },
-  { id: 'b179', name: "Tin Men"                                                   , day: 'd3', stage: 'blues',      start: '11:20', end: '12:20', yt: 'TgnKQr0u11s', verified: true },
+  { id: 'b179', name: "Tin Men"                                                   , day: 'd3', stage: 'blues',      start: '11:20', end: '12:20', yt: 'U3cquFS6_wU', verified: true },
   { id: 'b180', name: "Little Freddie King Blues Band"                            , day: 'd3', stage: 'blues',      start: '12:45', end: '13:35', yt: '1KrWBO5iDPo', verified: true },
   { id: 'b181', name: "Davell Crawford \"The Prince of New Orleans\""             , day: 'd3', stage: 'blues',      start: '14:00', end: '15:10', yt: 'gXMCyCi4fao', verified: true },
   { id: 'b182', name: "Sonny Landreth"                                            , day: 'd3', stage: 'blues',      start: '15:35', end: '16:55', yt: '_HW0z86SVkc', verified: true },
