@@ -782,12 +782,76 @@ function Header({ activeDay, setActiveDay, view, setView, scheduledCount, onMenu
 }
 
 // ─────────────────────────────────────────────────────────────
-// Mine: band detail sheet (tap a timeline block to preview)
+// Mine: band detail sheet — with conflict reordering + preview
 // ─────────────────────────────────────────────────────────────
+function DragHandle() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, opacity: 0.4 }}>
+      <circle cx="5" cy="4" r="1.5" fill="currentColor"/>
+      <circle cx="11" cy="4" r="1.5" fill="currentColor"/>
+      <circle cx="5" cy="8" r="1.5" fill="currentColor"/>
+      <circle cx="11" cy="8" r="1.5" fill="currentColor"/>
+      <circle cx="5" cy="12" r="1.5" fill="currentColor"/>
+      <circle cx="11" cy="12" r="1.5" fill="currentColor"/>
+    </svg>
+  );
+}
+
 function MineBandSheet({ band, conflictingBands, onClose, onRemove, onRemoveConflict }) {
   if (!band) return null;
-  const stage = STAGE_BY_ID[band.stage];
-  const day = DAY_BY_ID[band.day];
+
+  const hasConflicts = conflictingBands.length > 0;
+  // All bands in the conflict group, tapped band first
+  const allBands = useMemo(() => [band, ...conflictingBands], [band, conflictingBands]);
+  const [order, setOrder] = useState(() => allBands.map(b => b.id));
+  const [previewId, setPreviewId] = useState(band.id);
+
+  // Keep order in sync if bands change (e.g. after a remove)
+  useEffect(() => {
+    setOrder(prev => {
+      const ids = allBands.map(b => b.id);
+      const kept = prev.filter(id => ids.includes(id));
+      const added = ids.filter(id => !prev.includes(id));
+      return [...kept, ...added];
+    });
+  }, [allBands]);
+
+  const orderedBands = order.map(id => allBands.find(b => b.id === id)).filter(Boolean);
+  const previewBand = allBands.find(b => b.id === previewId) || band;
+  const previewStage = STAGE_BY_ID[previewBand.stage];
+  const day = DAY_BY_ID[previewBand.day];
+
+  // ── Drag-to-reorder ───────────────────────────────────────
+  const dragState = useRef(null);
+  const rowRefs = useRef({});
+
+  const onDragStart = (e, id) => {
+    e.stopPropagation();
+    dragState.current = { id, startY: e.clientY };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const onDragMove = (e) => {
+    if (!dragState.current) return;
+    const { id, startY } = dragState.current;
+    const dy = e.clientY - startY;
+    const ROW_H = 52;
+    const steps = Math.round(dy / ROW_H);
+    if (steps === 0) return;
+    setOrder(prev => {
+      const idx = prev.indexOf(id);
+      const next = [...prev];
+      const target = Math.max(0, Math.min(next.length - 1, idx + steps));
+      if (target === idx) return prev;
+      next.splice(idx, 1);
+      next.splice(target, 0, id);
+      dragState.current = { id, startY: e.clientY };
+      return next;
+    });
+  };
+
+  const onDragEnd = () => { dragState.current = null; };
+
   return (
     <div style={{
       position: 'absolute', inset: 0, zIndex: 110,
@@ -796,73 +860,117 @@ function MineBandSheet({ band, conflictingBands, onClose, onRemove, onRemoveConf
     }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
         background: '#1A1816', borderRadius: '20px 20px 0 0',
-        width: '100%', maxHeight: '88vh',
+        width: '100%', maxHeight: '92vh',
         display: 'flex', flexDirection: 'column',
         boxShadow: '0 -8px 40px rgba(0,0,0,0.6)',
         overflow: 'hidden',
       }}>
-        {/* Drag handle */}
+        {/* Sheet handle */}
         <div style={{ padding: '14px 20px 0', flexShrink: 0 }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(245,241,234,0.2)', margin: '0 auto' }} />
         </div>
 
-        {/* Video preview */}
+        {/* Video — switches when tapping a row */}
         <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', flexShrink: 0 }}>
-          <VideoPreview band={band} stage={stage} />
+          <VideoPreview band={previewBand} stage={previewStage} />
         </div>
 
-        {/* Scrollable info + actions */}
-        <div style={{ overflowY: 'auto', padding: '16px 20px 32px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Band info */}
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'Georgia, serif', color: '#F5F1EA', marginBottom: 4 }}>{band.name}</div>
-            <div style={{ fontSize: 13, color: 'rgba(245,241,234,0.6)', marginBottom: 4 }}>{day?.label} · {fmtTime(band.start)}–{fmtTime(band.end)}</div>
-            <div style={{
-              display: 'inline-block', fontSize: 11, color: '#fff', fontWeight: 600,
-              textTransform: 'uppercase', letterSpacing: 0.4,
-              background: stage.tone, padding: '3px 8px', borderRadius: 4,
-            }}>{stage.name}</div>
-          </div>
+        {/* Scrollable body */}
+        <div style={{ overflowY: 'auto', padding: '14px 16px 32px', display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-          {/* Conflict warning */}
-          {conflictingBands.length > 0 && (
-            <div style={{
-              background: 'rgba(220,80,70,0.12)', border: '1px solid rgba(220,80,70,0.3)',
-              borderRadius: 10, padding: '10px 12px',
-            }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#FFB4A8', marginBottom: 8 }}>
-                ⚠ Conflicts with {conflictingBands.length === 1 ? 'another band' : `${conflictingBands.length} bands`}:
+          {hasConflicts ? (
+            <>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: 'rgba(245,241,234,0.4)', textTransform: 'uppercase', marginBottom: 2 }}>
+                ⚠ Conflict — drag to rank, tap to preview, × to remove
               </div>
-              {conflictingBands.map(c => {
-                const cs = STAGE_BY_ID[c.stage];
+
+              {orderedBands.map((b, idx) => {
+                const s = STAGE_BY_ID[b.stage];
+                const isTop = idx === 0;
+                const isPreview = b.id === previewId;
+                const isOriginalBand = b.id === band.id;
                 return (
-                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <div>
-                      <span style={{ fontSize: 13, color: '#F5F1EA', fontWeight: 600 }}>{c.name}</span>
-                      <span style={{ fontSize: 11, color: 'rgba(245,241,234,0.5)', marginLeft: 8 }}>{fmtTimeShort(c.start)}–{fmtTimeShort(c.end)} · {cs.name}</span>
+                  <div key={b.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '10px 10px 10px 6px',
+                    borderRadius: 12,
+                    background: isTop
+                      ? 'rgba(74,222,128,0.12)'
+                      : isPreview
+                        ? 'rgba(255,255,255,0.06)'
+                        : 'rgba(255,255,255,0.03)',
+                    border: isTop ? '1px solid rgba(74,222,128,0.3)' : '1px solid transparent',
+                    cursor: 'pointer',
+                    transition: 'background 0.15s',
+                    minHeight: 52,
+                    boxSizing: 'border-box',
+                  }}>
+                    {/* Drag handle */}
+                    <div
+                      onPointerDown={e => onDragStart(e, b.id)}
+                      onPointerMove={onDragMove}
+                      onPointerUp={onDragEnd}
+                      onPointerCancel={onDragEnd}
+                      style={{ color: '#F5F1EA', cursor: 'grab', padding: '4px 2px', touchAction: 'none' }}
+                    >
+                      <DragHandle />
                     </div>
-                    <button onClick={() => { onRemoveConflict(c); onClose(); }} style={{
-                      border: 0, background: 'rgba(220,80,70,0.25)', color: '#FFB4A8',
-                      fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
-                    }}>Drop it</button>
+
+                    {/* Stage color dot */}
+                    <div style={{ width: 10, height: 10, borderRadius: 5, background: s.tone, flexShrink: 0 }} />
+
+                    {/* Band info — tap to preview */}
+                    <div style={{ flex: 1, minWidth: 0 }} onClick={() => setPreviewId(b.id)}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {isTop && <span style={{ fontSize: 9, fontWeight: 800, color: '#4ADE80', letterSpacing: 0.8, textTransform: 'uppercase' }}>Top pick</span>}
+                        <span style={{ fontSize: 14, fontWeight: 700, color: '#F5F1EA', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: 'rgba(245,241,234,0.5)', marginTop: 2 }}>
+                        {fmtTimeShort(b.start)}–{fmtTimeShort(b.end)} · {s.name}
+                      </div>
+                    </div>
+
+                    {/* Remove button */}
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        if (isOriginalBand) { onRemove(b); onClose(); }
+                        else onRemoveConflict(b);
+                      }}
+                      style={{
+                        flexShrink: 0, width: 30, height: 30, borderRadius: 15,
+                        border: 0, background: 'rgba(220,80,70,0.2)', color: '#FFB4A8',
+                        fontSize: 16, fontWeight: 700, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >×</button>
                   </div>
                 );
               })}
+            </>
+          ) : (
+            /* No conflict — simple band info */
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'Georgia, serif', color: '#F5F1EA', marginBottom: 4 }}>{band.name}</div>
+              <div style={{ fontSize: 13, color: 'rgba(245,241,234,0.6)', marginBottom: 6 }}>{day?.label} · {fmtTime(band.start)}–{fmtTime(band.end)}</div>
+              <div style={{ display: 'inline-block', fontSize: 11, color: '#fff', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, background: previewStage.tone, padding: '3px 8px', borderRadius: 4 }}>{previewStage.name}</div>
             </div>
           )}
 
-          {/* Actions */}
-          <div style={{ display: 'flex', gap: 10 }}>
+          {/* Close / Remove row */}
+          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
             <button onClick={onClose} style={{
               flex: 1, padding: '13px 0', border: '1px solid rgba(245,241,234,0.15)',
               background: 'transparent', color: '#F5F1EA',
               fontSize: 14, fontWeight: 600, borderRadius: 12, cursor: 'pointer',
             }}>Close</button>
-            <button onClick={() => { onRemove(band); onClose(); }} style={{
-              flex: 1, padding: '13px 0', border: 0,
-              background: 'rgba(220,80,70,0.2)', color: '#FFB4A8',
-              fontSize: 14, fontWeight: 600, borderRadius: 12, cursor: 'pointer',
-            }}>Remove</button>
+            {!hasConflicts && (
+              <button onClick={() => { onRemove(band); onClose(); }} style={{
+                flex: 1, padding: '13px 0', border: 0,
+                background: 'rgba(220,80,70,0.2)', color: '#FFB4A8',
+                fontSize: 14, fontWeight: 600, borderRadius: 12, cursor: 'pointer',
+              }}>Remove</button>
+            )}
           </div>
         </div>
       </div>
