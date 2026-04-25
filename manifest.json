@@ -1,6 +1,6 @@
 {
-  "name": "NOLA JazzFest 2026",
-  "short_name": "NOLA JazzFest",
+  "name": "StageHopper",
+  "short_name": "StageHopper",
   "description": "New Orleans Jazz & Heritage Festival 2026 schedule",
   "start_url": "./",
   "scope": "./",

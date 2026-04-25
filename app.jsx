@@ -401,7 +401,7 @@ function IntroOverlay({ onClose }) {
           margin: '0 0 6px', textAlign: 'center',
           fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 700,
           color: '#F5F1EA',
-        }}>Welcome to NOLA JazzFest</h2>
+        }}>Welcome to StageHopper</h2>
         <p style={{
           margin: '0 0 24px', textAlign: 'center',
           fontSize: 13, color: 'rgba(245,241,234,0.55)', lineHeight: 1.5,
@@ -642,7 +642,7 @@ function Header({ activeDay, setActiveDay, view, setView, scheduledCount, onMenu
           margin: 0, color: '#F5F1EA',
           fontFamily: 'Georgia, "Times New Roman", serif',
           fontSize: 20, fontWeight: 700, letterSpacing: -0.5,
-        }}>NOLA JazzFest</h1>
+        }}>StageHopper</h1>
         <HamburgerBtn onClick={onMenuOpen} />
       </div>
       {/* Row 2: view toggle */}
@@ -1228,7 +1228,7 @@ function HeaderInner({ days, activeDay, setActiveDay, view, setView, scheduledCo
           margin: 0, color: '#F5F1EA',
           fontFamily: 'Georgia, "Times New Roman", serif',
           fontSize: 20, fontWeight: 700, letterSpacing: -0.5,
-        }}>NOLA JazzFest</h1>
+        }}>StageHopper</h1>
         <HamburgerBtn onClick={onMenuOpen} />
       </div>
       {/* Row 2: view toggle */}
