@@ -1025,19 +1025,64 @@ function computeTopPicks(dayBands) {
 
 function ScheduleView({ scheduled, activeDay, onRemove }) {
   const [previewBand, setPreviewBand] = useState(null);
-  const headerRef = useRef(null);
-  const bodyRef = useRef(null);
+  const headerRef  = useRef(null); // stage name row — syncs scrollLeft with body
+  const timeRef    = useRef(null); // frozen time axis — syncs scrollTop with body
+  const bodyRef    = useRef(null); // main scroll area
 
   const dayBands = scheduled
     .filter(b => b.day === activeDay)
     .sort((a, b) => toMin(a.start) - toMin(b.start));
 
-  // Sync header horizontal scroll with body scroll
+  const topPicks = useMemo(() => computeTopPicks(dayBands), [dayBands]);
+
+  const conflictIds = useMemo(() => {
+    const ids = new Set();
+    for (let i = 0; i < dayBands.length; i++)
+      for (let j = i + 1; j < dayBands.length; j++)
+        if (overlap(dayBands[i], dayBands[j])) { ids.add(dayBands[i].id); ids.add(dayBands[j].id); }
+    return ids;
+  }, [dayBands]);
+
+  const startH = dayBands.length ? Math.max(11, Math.min(...dayBands.map(b => Math.floor(toMin(b.start) / 60)))) : 11;
+  const endH   = dayBands.length ? Math.min(22, Math.max(...dayBands.map(b => Math.ceil(toMin(b.end) / 60)))) : 19;
+  const pxPerHour = 80;
+  const totalH = (endH - startH) * pxPerHour;
+
+  const activeStages = window.STAGES.filter(s => dayBands.some(b => b.stage === s.id));
+  const stageColIdx  = Object.fromEntries(activeStages.map((s, i) => [s.id, i]));
+  const colW = 120;
+  const timeAxisW = 48;
+
+  // Sync all panels on body scroll
   const onBodyScroll = useCallback(() => {
-    if (headerRef.current && bodyRef.current) {
-      headerRef.current.scrollLeft = bodyRef.current.scrollLeft;
-    }
+    const body = bodyRef.current;
+    if (!body) return;
+    if (headerRef.current) headerRef.current.scrollLeft = body.scrollLeft;
+    if (timeRef.current)   timeRef.current.scrollTop   = body.scrollTop;
   }, []);
+
+  // Auto-scroll to current time (or first upcoming show) when day loads
+  useEffect(() => {
+    const body = bodyRef.current;
+    const time = timeRef.current;
+    if (!body) return;
+
+    const day = DAY_BY_ID[activeDay];
+    let targetMin;
+    if (day && day.date === todayDate()) {
+      targetMin = nowMinutes();
+    } else {
+      // Non-today: jump to first show
+      targetMin = dayBands.length ? toMin(dayBands[0].start) : startH * 60;
+    }
+    // Scroll so target time appears ~25% from top
+    const rawTop = (targetMin - startH * 60) / 60 * pxPerHour;
+    const scrollTop = Math.max(0, rawTop - body.clientHeight * 0.25);
+    body.scrollTop = scrollTop;
+    if (time) time.scrollTop = scrollTop;
+  }, [activeDay]);
+
+  const conflictsOf = (b) => dayBands.filter(o => o.id !== b.id && overlap(o, b));
 
   if (dayBands.length === 0) {
     return (
@@ -1056,33 +1101,15 @@ function ScheduleView({ scheduled, activeDay, onRemove }) {
     );
   }
 
-  const topPicks = computeTopPicks(dayBands);
-
-  const conflictIds = new Set();
-  for (let i = 0; i < dayBands.length; i++)
-    for (let j = i + 1; j < dayBands.length; j++)
-      if (overlap(dayBands[i], dayBands[j])) {
-        conflictIds.add(dayBands[i].id);
-        conflictIds.add(dayBands[j].id);
-      }
-
-  const startH = Math.max(11, Math.min(...dayBands.map(b => Math.floor(toMin(b.start) / 60))));
-  const endH   = Math.min(22, Math.max(...dayBands.map(b => Math.ceil(toMin(b.end) / 60))));
-  const pxPerHour = 80;
-  const totalH = (endH - startH) * pxPerHour;
-
-  // One column per stage that has picks, in canonical STAGES order
-  const activeStages = window.STAGES.filter(s => dayBands.some(b => b.stage === s.id));
-  const stageColIdx = Object.fromEntries(activeStages.map((s, i) => [s.id, i]));
-  const colW = 120;
-  const timeAxisW = 44;
-
-  const conflictsOf = (b) => dayBands.filter(o => o.id !== b.id && overlap(o, b));
+  // Now-line position (only for today)
+  const day = DAY_BY_ID[activeDay];
+  const isToday = day && day.date === todayDate();
+  const nowPx = isToday ? (nowMinutes() - startH * 60) / 60 * pxPerHour : null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
 
-      {/* Status banner — never scrolls */}
+      {/* Status banner */}
       <div style={{ flexShrink: 0, padding: '6px 10px 0' }}>
         {conflictIds.size > 0 ? (
           <div style={{
@@ -1101,105 +1128,135 @@ function ScheduleView({ scheduled, activeDay, onRemove }) {
         )}
       </div>
 
-      {/* Stage header row — fixed height, syncs scroll-x with body */}
-      <div ref={headerRef} style={{
-        flexShrink: 0, overflowX: 'hidden',
-        display: 'flex', background: '#181614',
-        borderTop: '1px solid rgba(255,255,255,0.06)',
-        borderBottom: '2px solid rgba(255,255,255,0.1)',
-        marginTop: 8,
-      }}>
-        {/* spacer for time axis */}
-        <div style={{ width: timeAxisW, flexShrink: 0 }} />
-        {activeStages.map(s => (
-          <div key={s.id} style={{
-            width: colW, flexShrink: 0,
-            padding: '7px 6px',
-            fontSize: 11, fontWeight: 800, textAlign: 'center',
-            color: s.tone, textTransform: 'uppercase', letterSpacing: 0.5,
-            borderLeft: '1px solid rgba(255,255,255,0.07)',
-            lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}>
-            {STAGE_ABBREV[s.id] || s.name}
-          </div>
-        ))}
+      {/* Stage header row — fixed, synced horizontally with body */}
+      <div style={{ flexShrink: 0, display: 'flex', marginTop: 8, background: '#181614', borderBottom: '2px solid rgba(255,255,255,0.1)' }}>
+        {/* Corner cell aligns with frozen time axis */}
+        <div style={{ width: timeAxisW, flexShrink: 0, borderRight: '1px solid rgba(255,255,255,0.08)' }} />
+        {/* Stage names scroll with body via JS */}
+        <div ref={headerRef} style={{ flex: 1, overflowX: 'hidden', display: 'flex' }}>
+          {activeStages.map(s => (
+            <div key={s.id} style={{
+              width: colW, flexShrink: 0,
+              padding: '7px 6px',
+              fontSize: 11, fontWeight: 800, textAlign: 'center',
+              color: s.tone, textTransform: 'uppercase', letterSpacing: 0.5,
+              borderLeft: '1px solid rgba(255,255,255,0.07)',
+              lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>
+              {STAGE_ABBREV[s.id] || s.name}
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Scrollable timeline body */}
-      <div ref={bodyRef} onScroll={onBodyScroll}
-        style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}>
-        <div style={{ minWidth: timeAxisW + activeStages.length * colW, height: totalH + 80, position: 'relative' }}>
+      {/* Main content row: frozen time axis + scrollable grid */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
-          {/* Hour lines + time labels */}
-          {Array.from({ length: endH - startH + 1 }, (_, i) => {
-            const h = startH + i;
-            const h12 = ((h + 11) % 12) + 1;
-            const ap = h >= 12 ? 'PM' : 'AM';
-            return (
-              <div key={h} style={{ position: 'absolute', left: 0, right: 0, top: i * pxPerHour }}>
-                <div style={{
-                  position: 'absolute', left: 2, top: -8,
-                  width: timeAxisW - 6, textAlign: 'right',
-                  fontSize: 10, fontWeight: 600, color: 'rgba(245,241,234,0.4)',
-                  fontVariantNumeric: 'tabular-nums',
+        {/* Frozen time axis — scrolls Y only (hidden overflow, driven by body) */}
+        <div ref={timeRef} style={{
+          width: timeAxisW, flexShrink: 0,
+          overflowY: 'hidden', overflowX: 'hidden',
+          background: '#0F0E0C',
+          borderRight: '1px solid rgba(255,255,255,0.08)',
+        }}>
+          <div style={{ height: totalH + 80, position: 'relative' }}>
+            {Array.from({ length: endH - startH + 1 }, (_, i) => {
+              const h = startH + i;
+              const h12 = ((h + 11) % 12) + 1;
+              const ap = h >= 12 ? 'PM' : 'AM';
+              return (
+                <div key={h} style={{
+                  position: 'absolute', top: i * pxPerHour - 8,
+                  right: 6, fontSize: 10, fontWeight: 600,
+                  color: 'rgba(245,241,234,0.45)', fontVariantNumeric: 'tabular-nums',
+                  whiteSpace: 'nowrap',
                 }}>{h12} {ap}</div>
-                <div style={{ position: 'absolute', left: timeAxisW, right: 0, height: 1, background: 'rgba(245,241,234,0.07)' }} />
-              </div>
-            );
-          })}
+              );
+            })}
+            {/* Now indicator in time axis */}
+            {nowPx !== null && (
+              <div style={{
+                position: 'absolute', top: nowPx, right: 0, left: 0,
+                height: 2, background: '#F87171',
+              }} />
+            )}
+          </div>
+        </div>
 
-          {/* Column backgrounds — alternating subtle tint */}
-          {activeStages.map((s, i) => (
-            <div key={s.id} style={{
-              position: 'absolute', top: 0, height: totalH,
-              left: timeAxisW + i * colW, width: colW,
-              background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.018)',
-              borderLeft: '1px solid rgba(255,255,255,0.05)',
-            }} />
-          ))}
+        {/* Scrollable events grid */}
+        <div ref={bodyRef} onScroll={onBodyScroll}
+          style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}>
+          <div style={{ minWidth: activeStages.length * colW, height: totalH + 80, position: 'relative' }}>
 
-          {/* Event blocks */}
-          {dayBands.map(b => {
-            const stage = STAGE_BY_ID[b.stage];
-            const colIdx = stageColIdx[b.stage] ?? 0;
-            const topPx = (toMin(b.start) - startH * 60) / 60 * pxPerHour;
-            const heightPx = Math.max((toMin(b.end) - toMin(b.start)) / 60 * pxPerHour - 4, 36);
-            const isTop = topPicks.has(b.id);
-            const isConflict = conflictIds.has(b.id);
+            {/* Hour lines */}
+            {Array.from({ length: endH - startH + 1 }, (_, i) => (
+              <div key={i} style={{
+                position: 'absolute', left: 0, right: 0,
+                top: i * pxPerHour, height: 1,
+                background: 'rgba(245,241,234,0.07)',
+              }} />
+            ))}
 
-            return (
-              <div key={b.id}
-                onClick={() => setPreviewBand(b)}
-                style={{
-                  position: 'absolute',
-                  top: topPx, height: heightPx,
-                  left: timeAxisW + colIdx * colW + 3,
-                  width: colW - 7,
-                  background: isTop ? `${stage.tone}d8` : `${stage.tone}22`,
-                  border: isTop
-                    ? `1.5px solid ${stage.tone}`
-                    : `1.5px dashed ${stage.tone}55`,
-                  borderRadius: 8, padding: '5px 8px',
-                  color: isTop ? '#fff' : 'rgba(255,255,255,0.38)',
-                  cursor: 'pointer', overflow: 'hidden',
-                  display: 'flex', flexDirection: 'column', gap: 2,
-                  boxSizing: 'border-box',
-                }}>
-                {isTop && isConflict && (
-                  <div style={{ fontSize: 8, fontWeight: 900, color: '#FCD34D', letterSpacing: 0.6, lineHeight: 1 }}>★ TOP PICK</div>
-                )}
-                <div style={{
-                  fontSize: 13, fontWeight: 700, lineHeight: 1.25,
-                  display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-                }}>
-                  {b.name}
+            {/* Column backgrounds */}
+            {activeStages.map((s, i) => (
+              <div key={s.id} style={{
+                position: 'absolute', top: 0, height: totalH,
+                left: i * colW, width: colW,
+                background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.018)',
+                borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+              }} />
+            ))}
+
+            {/* Now indicator line */}
+            {nowPx !== null && (
+              <div style={{
+                position: 'absolute', left: 0, right: 0, top: nowPx,
+                height: 2, background: '#F87171', zIndex: 5,
+                boxShadow: '0 0 6px rgba(248,113,113,0.6)',
+              }} />
+            )}
+
+            {/* Event blocks */}
+            {dayBands.map(b => {
+              const stage = STAGE_BY_ID[b.stage];
+              const colIdx = stageColIdx[b.stage] ?? 0;
+              const topPx = (toMin(b.start) - startH * 60) / 60 * pxPerHour;
+              const heightPx = Math.max((toMin(b.end) - toMin(b.start)) / 60 * pxPerHour - 4, 36);
+              const isTop = topPicks.has(b.id);
+              const isConflict = conflictIds.has(b.id);
+
+              return (
+                <div key={b.id}
+                  onClick={() => setPreviewBand(b)}
+                  style={{
+                    position: 'absolute',
+                    top: topPx, height: heightPx,
+                    left: colIdx * colW + 3,
+                    width: colW - 7,
+                    background: isTop ? `${stage.tone}d8` : `${stage.tone}22`,
+                    border: isTop ? `1.5px solid ${stage.tone}` : `1.5px dashed ${stage.tone}55`,
+                    borderRadius: 8, padding: '5px 8px',
+                    color: isTop ? '#fff' : 'rgba(255,255,255,0.38)',
+                    cursor: 'pointer', overflow: 'hidden',
+                    display: 'flex', flexDirection: 'column', gap: 2,
+                    boxSizing: 'border-box',
+                  }}>
+                  {isTop && isConflict && (
+                    <div style={{ fontSize: 8, fontWeight: 900, color: '#FCD34D', letterSpacing: 0.6, lineHeight: 1 }}>★ TOP PICK</div>
+                  )}
+                  <div style={{
+                    fontSize: 13, fontWeight: 700, lineHeight: 1.25,
+                    display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                  }}>
+                    {b.name}
+                  </div>
+                  <div style={{ fontSize: 10, opacity: 0.8, fontVariantNumeric: 'tabular-nums', marginTop: 'auto' }}>
+                    {fmtTimeShort(b.start)}–{fmtTimeShort(b.end)}
+                  </div>
                 </div>
-                <div style={{ fontSize: 10, opacity: 0.8, fontVariantNumeric: 'tabular-nums', marginTop: 'auto' }}>
-                  {fmtTimeShort(b.start)}–{fmtTimeShort(b.end)}
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
 
