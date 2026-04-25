@@ -1560,9 +1560,9 @@ function App() {
     };
 
     // A slot is "done" ONLY when the user has chosen ≥1 band from it.
-    // Rejected-only slots are skipped for display but are NOT done —
-    // they don't contribute to "you're all set."
-    let allChosen = true; // flip to false if any slot lacks a choice
+    // Past slots (today only) are silently skipped and don't affect allChosen.
+    // Rejected-only slots are skipped but NOT counted as done.
+    let allChosen = true; // flip to false if any current/future slot lacks a choice
 
     for (let i = 0; i < slots.length; i++) {
       const slot = slots[i];
@@ -1571,7 +1571,13 @@ function App() {
 
       if (hasChosen) continue; // genuinely done — user picked something
 
-      // No choice yet for this slot.
+      // Skip slots that have entirely passed (today only) — don't penalize allChosen
+      if (isToday) {
+        const maxEnd = Math.max(...slotBands.map(b => toMin(b.end)));
+        if (maxEnd <= now) continue;
+      }
+
+      // This slot is current or future and has no pick yet.
       allChosen = false;
       const pending = slotBands.filter(b => !scheduledIds.has(b.id) && !rejectedIds.has(b.id));
       if (pending.length === 0) continue; // all rejected, nothing to show — keep walking
