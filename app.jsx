@@ -971,31 +971,108 @@ function ScheduleView({ scheduled, activeDay, onRemove }) {
 // ─────────────────────────────────────────────────────────────
 // Discover (swipe stack) view
 // ─────────────────────────────────────────────────────────────
-function SlotBanner({ ctx }) {
-  if (!ctx) return null;
+// ─────────────────────────────────────────────────────────────
+// Stage picker sheet
+// ─────────────────────────────────────────────────────────────
+function StagePicker({ open, activeDay, onSelect, onClose }) {
+  if (!open) return null;
+  const dayBands = window.BANDS_FULL.filter(b => b.day === activeDay);
+  const stagesWithCounts = window.STAGES.map(s => ({
+    ...s,
+    count: dayBands.filter(b => b.stage === s.id).length,
+  })).filter(s => s.count > 0);
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 120,
+      background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)',
+      display: 'flex', alignItems: 'flex-end',
+    }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: '#1A1816', borderRadius: '20px 20px 0 0',
+        width: '100%', maxHeight: '75vh', overflow: 'hidden',
+        display: 'flex', flexDirection: 'column',
+        boxShadow: '0 -8px 40px rgba(0,0,0,0.6)',
+      }}>
+        <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(245,241,234,0.2)', margin: '0 auto 14px' }} />
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#F5F1EA' }}>Browse by Stage</div>
+          <div style={{ fontSize: 12, color: 'rgba(245,241,234,0.45)', marginTop: 3 }}>See all acts at one stage, in time order</div>
+        </div>
+        <div style={{ overflowY: 'auto', padding: '8px 0 32px' }}>
+          {stagesWithCounts.map(s => (
+            <button key={s.id} onClick={() => { onSelect(s.id); onClose(); }} style={{
+              display: 'flex', alignItems: 'center', gap: 14,
+              width: '100%', padding: '12px 20px', border: 0,
+              background: 'none', cursor: 'pointer', textAlign: 'left',
+            }}>
+              <div style={{ width: 12, height: 12, borderRadius: 6, background: s.tone, flexShrink: 0 }} />
+              <span style={{ flex: 1, fontSize: 15, fontWeight: 600, color: '#F5F1EA' }}>{s.name}</span>
+              <span style={{ fontSize: 12, color: 'rgba(245,241,234,0.4)' }}>{s.count} acts</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SlotBanner({ ctx, onOpenStagePicker, onExitStage }) {
+  if (!ctx) {
+    // No slot active — just show the "Browse by stage" affordance
+    return (
+      <div style={{ padding: '6px 20px 4px', display: 'flex', justifyContent: 'flex-end' }}>
+        <button onClick={onOpenStagePicker} style={{
+          border: '1px solid rgba(245,241,234,0.15)', background: 'none',
+          color: 'rgba(245,241,234,0.55)', fontSize: 11, fontWeight: 600,
+          padding: '4px 10px', borderRadius: 6, cursor: 'pointer', letterSpacing: 0.2,
+        }}>Browse a stage →</button>
+      </div>
+    );
+  }
+
+  if (ctx.isStageMode) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '6px 16px 4px',
+        background: 'rgba(255,255,255,0.04)',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, color: '#FACC15', textTransform: 'uppercase' }}>Stage</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#F5F1EA' }}>{ctx.time}</span>
+          {ctx.total > 0 && <span style={{ fontSize: 11, color: 'rgba(245,241,234,0.45)' }}>· {ctx.total} left</span>}
+        </div>
+        <button onClick={onExitStage} style={{
+          border: '1px solid rgba(245,241,234,0.2)', background: 'none',
+          color: 'rgba(245,241,234,0.7)', fontSize: 11, fontWeight: 600,
+          padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+        }}>← Back to timeslots</button>
+      </div>
+    );
+  }
+
   const labelColor = ctx.label === 'NOW' ? '#4ADE80' : ctx.label === 'NEXT' ? '#FACC15' : 'rgba(245,241,234,0.5)';
   const dots = Array.from({ length: ctx.totalSlots }, (_, i) => i);
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '6px 20px 4px',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {ctx.label && (
-          <span style={{
-            fontSize: 10, fontWeight: 800, letterSpacing: 1,
-            color: labelColor, textTransform: 'uppercase',
-          }}>{ctx.label}</span>
-        )}
-        <span style={{ fontSize: 12, fontWeight: 600, color: '#F5F1EA' }}>{ctx.time}</span>
-        <span style={{ fontSize: 11, color: 'rgba(245,241,234,0.45)' }}>· {ctx.total} sets</span>
+    <div style={{ padding: '6px 16px 4px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {ctx.label && <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1, color: labelColor, textTransform: 'uppercase' }}>{ctx.label}</span>}
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#F5F1EA' }}>{ctx.time}</span>
+          <span style={{ fontSize: 11, color: 'rgba(245,241,234,0.45)' }}>· {ctx.total} sets</span>
+        </div>
+        <button onClick={onOpenStagePicker} style={{
+          border: '1px solid rgba(245,241,234,0.15)', background: 'none',
+          color: 'rgba(245,241,234,0.45)', fontSize: 10, fontWeight: 600,
+          padding: '3px 8px', borderRadius: 6, cursor: 'pointer', letterSpacing: 0.2,
+        }}>By stage</button>
       </div>
-      {/* Slot progress dots */}
       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
         {dots.map(i => (
           <div key={i} style={{
-            width: i === ctx.slotIdx ? 12 : 5,
-            height: 5, borderRadius: 3,
+            width: i === ctx.slotIdx ? 14 : 5, height: 5, borderRadius: 3,
             background: i === ctx.slotIdx ? '#F5F1EA' : i < ctx.slotIdx ? 'rgba(245,241,234,0.35)' : 'rgba(245,241,234,0.12)',
             transition: 'all 0.2s',
           }} />
@@ -1005,7 +1082,7 @@ function SlotBanner({ ctx }) {
   );
 }
 
-function DiscoverView({ deck, slotContext, onSwipe, onUndo, undoStack, scheduled, soundOn, setSoundOn }) {
+function DiscoverView({ deck, slotContext, onSwipe, onUndo, undoStack, scheduled, soundOn, setSoundOn, browseStage, onBrowseStage, onOpenStagePicker }) {
   if (deck.length === 0) {
     return (
       <div style={{
@@ -1038,7 +1115,11 @@ function DiscoverView({ deck, slotContext, onSwipe, onUndo, undoStack, scheduled
     <div style={{
       flex: 1, position: 'relative', display: 'flex', flexDirection: 'column',
     }}>
-      <SlotBanner ctx={slotContext} />
+      <SlotBanner
+        ctx={slotContext}
+        onOpenStagePicker={onOpenStagePicker}
+        onExitStage={() => onBrowseStage(null)}
+      />
       <div style={{ flex: 1, position: 'relative' }}>
         {below && (
           <BandCard
@@ -1178,6 +1259,8 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showIntro, setShowIntro] = useState(() => !localStorage.getItem(LS_INTRO));
   const [mapView, setMapView] = useState(null); // 'festival' | 'access' | null
+  const [browseStage, setBrowseStage] = useState(null); // null = timeslot mode; stageId = stage-browse mode
+  const [stagePickerOpen, setStagePickerOpen] = useState(false);
 
   // Expose map opener for menu items
   window.__openMap = setMapView;
@@ -1196,20 +1279,28 @@ function App() {
     [bands, scheduledIds]
   );
 
-  // ── Timeslot-gated deck ──────────────────────────────────────
-  // Only show cards for one timeslot at a time. Advance when user
-  // has chosen ≥1 from the current slot (or all were swiped away).
+  // ── Deck computation ─────────────────────────────────────────
   const { deck, slotContext } = useMemo(() => {
     const allDay = bands.filter(b => b.day === activeDay);
-    const slots = [...new Set(allDay.map(b => b.start))].sort();
 
-    // For today, getTargetSlot() respects real clock + chosen-check.
-    let activeSlot = null;
+    // ── Stage-browse mode ──────────────────────────────────────
+    if (browseStage) {
+      const stageBands = allDay
+        .filter(b => b.stage === browseStage && !scheduledIds.has(b.id) && !rejectedIds.has(b.id))
+        .sort((a, b) => toMin(a.start) - toMin(b.start));
+      const stage = STAGE_BY_ID[browseStage];
+      return {
+        deck: stageBands,
+        slotContext: { label: 'STAGE', time: stage?.name ?? '', total: stageBands.length, slotIdx: -1, totalSlots: 0, isStageMode: true },
+      };
+    }
+
+    // ── Timeslot-gated mode (default) ─────────────────────────
+    const slots = [...new Set(allDay.map(b => b.start))].sort();
     const dayDate = DAY_BY_ID[activeDay]?.date;
     if (dayDate === todayDate()) {
       const { slot, label } = getTargetSlot(activeDay, allDay, scheduledIds);
       if (slot) {
-        activeSlot = slot;
         const slotBands = allDay.filter(b => b.start === slot);
         const remaining = slotBands.filter(b => !scheduledIds.has(b.id) && !rejectedIds.has(b.id));
         return {
@@ -1218,23 +1309,19 @@ function App() {
         };
       }
     }
-
-    // Non-today (or today before/after festival hours): walk slots in order,
-    // find first with pending cards and no chosen band yet.
     for (let i = 0; i < slots.length; i++) {
       const slot = slots[i];
       const slotBands = allDay.filter(b => b.start === slot);
-      const hasChosen = slotBands.some(b => scheduledIds.has(b.id));
-      if (hasChosen) continue; // slot done — advance
+      if (slotBands.some(b => scheduledIds.has(b.id))) continue;
       const pending = slotBands.filter(b => !scheduledIds.has(b.id) && !rejectedIds.has(b.id));
-      if (pending.length === 0) continue; // all rejected — advance
+      if (pending.length === 0) continue;
       return {
         deck: pending,
         slotContext: { label: null, time: fmtTime(slot), total: slotBands.length, slotIdx: i, totalSlots: slots.length },
       };
     }
     return { deck: [], slotContext: null };
-  }, [bands, activeDay, scheduledIds, rejectedIds]);
+  }, [bands, activeDay, browseStage, scheduledIds, rejectedIds]);
 
   const handleSwipe = useCallback((band, dir) => {
     if (dir === 'left') {
@@ -1335,6 +1422,9 @@ function App() {
           scheduled={scheduledBands}
           soundOn={soundOn}
           setSoundOn={(v) => { setSoundOn(v); setTweak('soundOn', v); }}
+          browseStage={browseStage}
+          onBrowseStage={setBrowseStage}
+          onOpenStagePicker={() => setStagePickerOpen(true)}
         />
       ) : (
         <ScheduleView
@@ -1366,6 +1456,14 @@ function App() {
           setShowIntro(false);
         }} />
       )}
+
+      {/* Stage picker */}
+      <StagePicker
+        open={stagePickerOpen}
+        activeDay={activeDay}
+        onSelect={(stageId) => { setBrowseStage(stageId); setStagePickerOpen(false); }}
+        onClose={() => setStagePickerOpen(false)}
+      />
 
       {/* Map viewer */}
       {mapView === 'festival' && (
