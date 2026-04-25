@@ -232,14 +232,6 @@ function BandCard({ band, top, onSwipe, scheduled, soundOn, onToggleSound }) {
             background: `linear-gradient(135deg, ${stage.tone}, #1a1a1a)`,
           }} />
         )}
-        {/* Stage tag */}
-        <div style={{
-          position: 'absolute', top: 12, left: 12, zIndex: 7,
-          background: stage.tone, color: '#fff',
-          fontSize: 11, fontWeight: 600, letterSpacing: 0.4,
-          padding: '5px 9px', borderRadius: 6, textTransform: 'uppercase',
-          pointerEvents: 'none',
-        }}>{stage.name}</div>
         {/* (sound toggle removed — no embed playing) */}
         {/* fade to dark for text legibility */}
         <div style={{
@@ -273,11 +265,21 @@ function BandCard({ band, top, onSwipe, scheduled, soundOn, onToggleSound }) {
         </div>
 
         <div style={{
-          display: 'inline-flex', alignSelf: 'flex-start',
-          fontSize: 11, fontWeight: 600, letterSpacing: 0.4,
-          color: stage.tone, background: 'rgba(255,255,255,0.08)',
-          padding: '3px 8px', borderRadius: 4, textTransform: 'uppercase',
-        }}>{band.genre}</div>
+          display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+        }}>
+          <div style={{
+            display: 'inline-flex',
+            fontSize: 11, fontWeight: 600, letterSpacing: 0.4,
+            background: stage.tone, color: '#fff',
+            padding: '3px 8px', borderRadius: 4, textTransform: 'uppercase',
+          }}>{stage.name}</div>
+          {band.genre && <div style={{
+            display: 'inline-flex',
+            fontSize: 11, fontWeight: 600, letterSpacing: 0.4,
+            color: stage.tone, background: 'rgba(255,255,255,0.08)',
+            padding: '3px 8px', borderRadius: 4, textTransform: 'uppercase',
+          }}>{band.genre}</div>}
+        </div>
 
         <p style={{
           margin: '4px 0 0', fontSize: 14, lineHeight: 1.45,
