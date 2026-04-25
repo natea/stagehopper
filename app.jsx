@@ -694,19 +694,38 @@ function HamburgerBtn({ onClick }) {
 }
 
 function ViewToggle({ view, setView, scheduledCount }) {
+  const hasPicks = scheduledCount > 0;
+  const mineIsActive = view === 'schedule';
   return (
-    <div style={{ display: 'flex', gap: 4, padding: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 10 }}>
-      {['discover', 'schedule'].map(v => (
-        <button key={v} onClick={() => setView(v)} style={{
-          border: 0, background: view === v ? '#F5F1EA' : 'transparent',
-          color: view === v ? '#0F0E0C' : 'rgba(245,241,234,0.7)',
+    <>
+      <style>{`
+        @keyframes mine-pulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(251,191,36,0.55); }
+          50%       { box-shadow: 0 0 0 6px rgba(251,191,36,0); }
+        }
+      `}</style>
+      <div style={{ display: 'flex', gap: 4, padding: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 10 }}>
+        <button onClick={() => setView('discover')} style={{
+          border: 0,
+          background: view === 'discover' ? '#F5F1EA' : 'transparent',
+          color: view === 'discover' ? '#0F0E0C' : 'rgba(245,241,234,0.7)',
           fontSize: 12, fontWeight: 600, padding: '6px 12px',
           borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 0.2,
+        }}>Discover</button>
+
+        <button onClick={() => setView('schedule')} style={{
+          border: 0,
+          background: mineIsActive ? '#F5F1EA' : hasPicks ? '#FBBF24' : 'transparent',
+          color: mineIsActive ? '#0F0E0C' : hasPicks ? '#0F0E0C' : 'rgba(245,241,234,0.7)',
+          fontSize: 12, fontWeight: 700, padding: '6px 12px',
+          borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 0.2,
+          animation: hasPicks && !mineIsActive ? 'mine-pulse 1.8s ease-in-out infinite' : 'none',
+          transition: 'background 0.2s, color 0.2s',
         }}>
-          {v === 'discover' ? 'Discover' : `Mine · ${scheduledCount}`}
+          Mine · {scheduledCount}
         </button>
-      ))}
-    </div>
+      </div>
+    </>
   );
 }
 
