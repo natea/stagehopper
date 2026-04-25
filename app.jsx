@@ -801,10 +801,19 @@ function MineBandSheet({ band, conflictingBands, onClose, onRemove, onRemoveConf
   if (!band) return null;
 
   const hasConflicts = conflictingBands.length > 0;
-  // All bands in the conflict group, tapped band first
+  // All bands in the conflict group
   const allBands = useMemo(() => [band, ...conflictingBands], [band, conflictingBands]);
-  const [order, setOrder] = useState(() => allBands.map(b => b.id));
-  const [previewId, setPreviewId] = useState(band.id);
+
+  // Initial order: put computeTopPicks winner first (matches ScheduleView highlighting)
+  const [order, setOrder] = useState(() => {
+    const topIds = computeTopPicks(allBands);
+    const topId = allBands.find(b => topIds.has(b.id))?.id ?? allBands[0].id;
+    return [topId, ...allBands.filter(b => b.id !== topId).map(b => b.id)];
+  });
+  const [previewId, setPreviewId] = useState(() => {
+    const topIds = computeTopPicks(allBands);
+    return allBands.find(b => topIds.has(b.id))?.id ?? band.id;
+  });
 
   // Keep order in sync if bands change (e.g. after a remove)
   useEffect(() => {
