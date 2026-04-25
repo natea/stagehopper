@@ -1,6 +1,6 @@
 {
-  "name": "Jazz Fest ScheduleBot",
-  "short_name": "Jazz Fest",
+  "name": "NOLA JazzFest 2026",
+  "short_name": "NOLA JazzFest",
   "description": "New Orleans Jazz & Heritage Festival 2026 schedule",
   "start_url": "./",
   "scope": "./",

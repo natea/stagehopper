@@ -357,38 +357,268 @@ function ActionBar({ onSkip, onAdd, onUndo, canUndo }) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Day tabs + view toggle
+// Intro overlay — shown once on first visit, accessible later via menu
 // ─────────────────────────────────────────────────────────────
-function Header({ activeDay, setActiveDay, view, setView, scheduledCount }) {
+const LS_INTRO = 'jf26.introSeen.v1';
+
+function IntroOverlay({ onClose }) {
   return (
     <div style={{
-      padding: '54px 16px 0', position: 'relative', zIndex: 5,
-      background: 'rgba(15,14,12,0.0)',
+      position: 'fixed', inset: 0, zIndex: 200,
+      background: 'rgba(10,9,8,0.92)',
+      backdropFilter: 'blur(12px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '24px 24px',
+      paddingTop: 'max(24px, env(safe-area-inset-top, 24px))',
+      paddingBottom: 'max(24px, env(safe-area-inset-bottom, 24px))',
     }}>
       <div style={{
-        display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
-        marginBottom: 12,
+        maxWidth: 360, width: '100%',
+        background: '#1C1A17', borderRadius: 20,
+        padding: '32px 28px',
+        boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
+        border: '1px solid rgba(255,255,255,0.08)',
+      }}>
+        <div style={{ fontSize: 36, textAlign: 'center', marginBottom: 12 }}>🎷</div>
+        <h2 style={{
+          margin: '0 0 6px', textAlign: 'center',
+          fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 700,
+          color: '#F5F1EA',
+        }}>Welcome to NOLA JazzFest</h2>
+        <p style={{
+          margin: '0 0 24px', textAlign: 'center',
+          fontSize: 13, color: 'rgba(245,241,234,0.55)', lineHeight: 1.5,
+        }}>New Orleans Jazz &amp; Heritage Festival 2026</p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 28 }}>
+          {[
+            ['👆', 'Swipe right to add a set to your schedule'],
+            ['👈', 'Swipe left to skip'],
+            ['↩️', 'Tap Undo to bring back the last swipe'],
+            ['📅', 'Switch days with the tabs at the top'],
+            ['☰', 'Tap the menu for maps and more'],
+          ].map(([icon, text]) => (
+            <div key={text} style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <span style={{ fontSize: 20, lineHeight: '1.3', flexShrink: 0 }}>{icon}</span>
+              <span style={{ fontSize: 14, color: 'rgba(245,241,234,0.8)', lineHeight: 1.5 }}>{text}</span>
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={onClose}
+          style={{
+            width: '100%', padding: '14px 0', border: 0,
+            background: '#C2410C', color: '#fff',
+            fontSize: 15, fontWeight: 700, borderRadius: 12,
+            cursor: 'pointer', letterSpacing: 0.2,
+          }}
+        >Let's go →</button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Map viewer — fullscreen image with native pinch/pan
+// ─────────────────────────────────────────────────────────────
+function MapViewer({ src, title, onClose }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 150,
+      background: '#000',
+      display: 'flex', flexDirection: 'column',
+    }}>
+      {/* Toolbar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '12px 16px',
+        paddingTop: 'max(12px, env(safe-area-inset-top, 12px))',
+        background: 'rgba(15,14,12,0.95)',
+        backdropFilter: 'blur(10px)',
+        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        flexShrink: 0,
+        zIndex: 10,
+      }}>
+        <span style={{ fontSize: 15, fontWeight: 600, color: '#F5F1EA' }}>{title}</span>
+        <button
+          onClick={onClose}
+          style={{
+            border: 0, background: 'rgba(255,255,255,0.1)', color: '#F5F1EA',
+            width: 32, height: 32, borderRadius: 16,
+            fontSize: 18, cursor: 'pointer', lineHeight: '32px', padding: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >✕</button>
+      </div>
+      {/* Map — scrollable so user can pan; pinch-zoom is browser-native on mobile */}
+      <div style={{
+        flex: 1, overflow: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        touchAction: 'pinch-zoom pan-x pan-y',
+        cursor: 'grab',
+      }}>
+        <img
+          src={src}
+          alt={title}
+          style={{
+            display: 'block',
+            width: '200%',   /* wider than screen → horizontal scroll = pan */
+            maxWidth: 'none',
+            height: 'auto',
+          }}
+        />
+      </div>
+      <p style={{
+        textAlign: 'center', fontSize: 11,
+        color: 'rgba(245,241,234,0.35)',
+        padding: '8px 0',
+        paddingBottom: 'max(8px, env(safe-area-inset-bottom, 8px))',
+        flexShrink: 0,
+      }}>Pinch to zoom · drag to pan</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Hamburger slide-out menu
+// ─────────────────────────────────────────────────────────────
+function HamburgerMenu({ open, onClose, onShowIntro }) {
+  if (!open) return null;
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 90,
+          background: 'rgba(0,0,0,0.55)',
+          backdropFilter: 'blur(4px)',
+        }}
+      />
+      {/* Drawer */}
+      <div style={{
+        position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 100,
+        width: 280,
+        background: '#1C1A17',
+        borderLeft: '1px solid rgba(255,255,255,0.08)',
+        display: 'flex', flexDirection: 'column',
+        paddingTop: 'max(16px, env(safe-area-inset-top, 16px))',
+        paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))',
+        boxShadow: '-8px 0 32px rgba(0,0,0,0.5)',
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '0 20px 16px',
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
+        }}>
+          <span style={{
+            fontFamily: 'Georgia, serif', fontSize: 17, fontWeight: 700,
+            color: '#F5F1EA',
+          }}>Menu</span>
+          <button onClick={onClose} style={{
+            border: 0, background: 'none', color: 'rgba(245,241,234,0.5)',
+            fontSize: 22, cursor: 'pointer', padding: 4, lineHeight: 1,
+          }}>✕</button>
+        </div>
+
+        <MenuSection label="Maps" />
+        <MenuRow icon="🗺️" label="Festival Map" onPress={() => { onClose(); window.__openMap('festival'); }} />
+        <MenuRow icon="♿" label="Accessibility Map" onPress={() => { onClose(); window.__openMap('access'); }} />
+
+        <MenuSection label="Help" />
+        <MenuRow icon="❓" label="How to use this app" onPress={() => { onClose(); onShowIntro(); }} />
+
+        <div style={{ flex: 1 }} />
+        <p style={{
+          padding: '0 20px', fontSize: 11,
+          color: 'rgba(245,241,234,0.25)', lineHeight: 1.5,
+        }}>
+          New Orleans Jazz &amp; Heritage Festival<br />April 23 – May 3, 2026
+        </p>
+      </div>
+    </>
+  );
+}
+
+function MenuSection({ label }) {
+  return (
+    <div style={{
+      padding: '16px 20px 4px',
+      fontSize: 10, fontWeight: 700, letterSpacing: 1,
+      color: 'rgba(245,241,234,0.35)', textTransform: 'uppercase',
+    }}>{label}</div>
+  );
+}
+
+function MenuRow({ icon, label, onPress }) {
+  return (
+    <button
+      onClick={onPress}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 14,
+        padding: '13px 20px', border: 0, background: 'none',
+        color: '#F5F1EA', fontSize: 15, fontWeight: 500,
+        cursor: 'pointer', textAlign: 'left', width: '100%',
+      }}
+    >
+      <span style={{ fontSize: 20, width: 24, textAlign: 'center' }}>{icon}</span>
+      {label}
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Day tabs + view toggle
+// ─────────────────────────────────────────────────────────────
+function HamburgerBtn({ onClick }) {
+  return (
+    <button onClick={onClick} style={{
+      border: 0, background: 'rgba(255,255,255,0.08)',
+      color: '#F5F1EA', borderRadius: 8,
+      width: 36, height: 36, cursor: 'pointer', flexShrink: 0,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 5,
+    }}>
+      {[0,1,2].map(i => <span key={i} style={{ display: 'block', width: 18, height: 2, background: '#F5F1EA', borderRadius: 1 }} />)}
+    </button>
+  );
+}
+
+function Header({ activeDay, setActiveDay, view, setView, scheduledCount, onMenuOpen }) {
+  return (
+    <div style={{
+      padding: '0 16px',
+      paddingTop: 'max(16px, env(safe-area-inset-top, 16px))',
+      paddingBottom: 0,
+      position: 'relative', zIndex: 5,
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 12, gap: 8,
       }}>
         <h1 style={{
           margin: 0, color: '#F5F1EA',
           fontFamily: 'Georgia, "Times New Roman", serif',
-          fontSize: 26, fontWeight: 700, letterSpacing: -0.5,
+          fontSize: 22, fontWeight: 700, letterSpacing: -0.5, flexShrink: 0,
         }}>NOLA JazzFest</h1>
-        <div style={{
-          display: 'flex', gap: 4, padding: 3,
-          background: 'rgba(255,255,255,0.08)', borderRadius: 10,
-        }}>
-          {['discover', 'schedule'].map(v => (
-            <button key={v} onClick={() => setView(v)} style={{
-              border: 0, background: view === v ? '#F5F1EA' : 'transparent',
-              color: view === v ? '#0F0E0C' : 'rgba(245,241,234,0.7)',
-              fontSize: 12, fontWeight: 600, padding: '6px 12px',
-              borderRadius: 7, cursor: 'pointer',
-              fontFamily: 'inherit', letterSpacing: 0.2,
-            }}>
-              {v === 'discover' ? 'Discover' : `Mine · ${scheduledCount}`}
-            </button>
-          ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{
+            display: 'flex', gap: 4, padding: 3,
+            background: 'rgba(255,255,255,0.08)', borderRadius: 10,
+          }}>
+            {['discover', 'schedule'].map(v => (
+              <button key={v} onClick={() => setView(v)} style={{
+                border: 0, background: view === v ? '#F5F1EA' : 'transparent',
+                color: view === v ? '#0F0E0C' : 'rgba(245,241,234,0.7)',
+                fontSize: 12, fontWeight: 600, padding: '6px 12px',
+                borderRadius: 7, cursor: 'pointer',
+                fontFamily: 'inherit', letterSpacing: 0.2,
+              }}>
+                {v === 'discover' ? 'Discover' : `Mine · ${scheduledCount}`}
+              </button>
+            ))}
+          </div>
+          <HamburgerBtn onClick={onMenuOpen} />
         </div>
       </div>
 
@@ -713,11 +943,17 @@ function App() {
 
   const [scheduledIds, setScheduledIds] = useState(() => loadSet(LS_KEY));
   const [rejectedIds, setRejectedIds] = useState(() => loadSet(LS_REJECT));
-  const [activeDay, setActiveDay] = useState(() => localStorage.getItem(LS_DAY) || 'd3');
+  const [activeDay, setActiveDay] = useState(() => localStorage.getItem(LS_DAY) || 'd2');
   const [view, setView] = useState('discover');
   const [soundOn, setSoundOn] = useState(t.soundOn);
   const [undoStack, setUndoStack] = useState([]);
-  const [pendingConflict, setPendingConflict] = useState(null); // { band, conflicts }
+  const [pendingConflict, setPendingConflict] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [showIntro, setShowIntro] = useState(() => !localStorage.getItem(LS_INTRO));
+  const [mapView, setMapView] = useState(null); // 'festival' | 'access' | null
+
+  // Expose map opener for menu items
+  window.__openMap = setMapView;
 
   useEffect(() => saveSet(LS_KEY, scheduledIds), [scheduledIds]);
   useEffect(() => saveSet(LS_REJECT, rejectedIds), [rejectedIds]);
@@ -815,6 +1051,7 @@ function App() {
         view={view}
         setView={setView}
         scheduledCount={scheduledBands.length}
+        onMenuOpen={() => setMenuOpen(true)}
       />
 
       {view === 'discover' ? (
@@ -842,6 +1079,29 @@ function App() {
         onReplace={handleReplace}
         onAddBoth={handleAddBoth}
       />
+
+      {/* Hamburger menu */}
+      <HamburgerMenu
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onShowIntro={() => setShowIntro(true)}
+      />
+
+      {/* First-run intro overlay */}
+      {showIntro && (
+        <IntroOverlay onClose={() => {
+          localStorage.setItem(LS_INTRO, '1');
+          setShowIntro(false);
+        }} />
+      )}
+
+      {/* Map viewer */}
+      {mapView === 'festival' && (
+        <MapViewer src="festival-map.jpg" title="Festival Map" onClose={() => setMapView(null)} />
+      )}
+      {mapView === 'access' && (
+        <MapViewer src="access-map.jpg" title="Accessibility Map" onClose={() => setMapView(null)} />
+      )}
 
       {/* Tweaks panel */}
       {window.TweaksPanel && (
@@ -871,34 +1131,40 @@ function App() {
 }
 
 // Header pulled inline so we can pass days dynamically
-function HeaderInner({ days, activeDay, setActiveDay, view, setView, scheduledCount }) {
+function HeaderInner({ days, activeDay, setActiveDay, view, setView, scheduledCount, onMenuOpen }) {
   const compact = days.length > 4;
   return (
     <div style={{
-      padding: '54px 16px 0', position: 'relative', zIndex: 5,
+      padding: '0 16px',
+      paddingTop: 'max(16px, env(safe-area-inset-top, 16px))',
+      paddingBottom: 0,
+      position: 'relative', zIndex: 5,
     }}>
       <div style={{
-        display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
-        marginBottom: 12,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 12, gap: 8,
       }}>
         <h1 style={{
           margin: 0, color: '#F5F1EA',
           fontFamily: 'Georgia, "Times New Roman", serif',
-          fontSize: 26, fontWeight: 700, letterSpacing: -0.5,
+          fontSize: 22, fontWeight: 700, letterSpacing: -0.5, flexShrink: 0,
         }}>NOLA JazzFest</h1>
-        <div style={{
-          display: 'flex', gap: 4, padding: 3,
-          background: 'rgba(255,255,255,0.08)', borderRadius: 10,
-        }}>
-          {[['discover','Discover'], ['schedule', `Mine · ${scheduledCount}`]].map(([v, label]) => (
-            <button key={v} onClick={() => setView(v)} style={{
-              border: 0, background: view === v ? '#F5F1EA' : 'transparent',
-              color: view === v ? '#0F0E0C' : 'rgba(245,241,234,0.7)',
-              fontSize: 12, fontWeight: 600, padding: '6px 12px',
-              borderRadius: 7, cursor: 'pointer',
-              fontFamily: 'inherit', letterSpacing: 0.2,
-            }}>{label}</button>
-          ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{
+            display: 'flex', gap: 4, padding: 3,
+            background: 'rgba(255,255,255,0.08)', borderRadius: 10,
+          }}>
+            {[['discover','Discover'], ['schedule', `Mine · ${scheduledCount}`]].map(([v, label]) => (
+              <button key={v} onClick={() => setView(v)} style={{
+                border: 0, background: view === v ? '#F5F1EA' : 'transparent',
+                color: view === v ? '#0F0E0C' : 'rgba(245,241,234,0.7)',
+                fontSize: 12, fontWeight: 600, padding: '6px 12px',
+                borderRadius: 7, cursor: 'pointer',
+                fontFamily: 'inherit', letterSpacing: 0.2,
+              }}>{label}</button>
+            ))}
+          </div>
+          <HamburgerBtn onClick={onMenuOpen} />
         </div>
       </div>
 

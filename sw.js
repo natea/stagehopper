@@ -1,5 +1,5 @@
 // Bump CACHE_VERSION whenever you ship updates so users get fresh files.
-const CACHE_VERSION = 'jazzfest-v1';
+const CACHE_VERSION = 'jazzfest-v2';
 const CORE = [
   './',
   './index.html',
@@ -11,6 +11,8 @@ const CORE = [
   './icon-192.png',
   './icon-512.png',
   './apple-touch-icon.png',
+  './festival-map.jpg',
+  './access-map.jpg',
   'https://unpkg.com/react@18.3.1/umd/react.development.js',
   'https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js',
   'https://unpkg.com/@babel/standalone@7.29.0/babel.min.js',
