@@ -772,64 +772,79 @@ function MineBandSheet({ band, conflictingBands, onClose, onRemove, onRemoveConf
   return (
     <div style={{
       position: 'absolute', inset: 0, zIndex: 110,
-      background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)',
+      background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)',
       display: 'flex', alignItems: 'flex-end',
     }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
         background: '#1A1816', borderRadius: '20px 20px 0 0',
-        padding: '20px 20px 32px', width: '100%', boxSizing: 'border-box',
-        boxShadow: '0 -8px 32px rgba(0,0,0,0.5)',
+        width: '100%', maxHeight: '88vh',
+        display: 'flex', flexDirection: 'column',
+        boxShadow: '0 -8px 40px rgba(0,0,0,0.6)',
+        overflow: 'hidden',
       }}>
-        <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(245,241,234,0.2)', margin: '0 auto 18px' }} />
-
-        {/* Band info */}
-        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', marginBottom: 16 }}>
-          <div style={{ width: 52, height: 52, borderRadius: 10, background: stage.tone, flexShrink: 0 }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'Georgia, serif', color: '#F5F1EA', marginBottom: 3 }}>{band.name}</div>
-            <div style={{ fontSize: 12, color: 'rgba(245,241,234,0.6)' }}>{day?.label} · {fmtTime(band.start)}–{fmtTime(band.end)}</div>
-            <div style={{ fontSize: 11, color: stage.tone, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 3 }}>{stage.name}</div>
-          </div>
+        {/* Drag handle */}
+        <div style={{ padding: '14px 20px 0', flexShrink: 0 }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(245,241,234,0.2)', margin: '0 auto' }} />
         </div>
 
-        {/* Conflict warning */}
-        {conflictingBands.length > 0 && (
-          <div style={{
-            background: 'rgba(220,80,70,0.12)', border: '1px solid rgba(220,80,70,0.3)',
-            borderRadius: 10, padding: '10px 12px', marginBottom: 14,
-          }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#FFB4A8', marginBottom: 8 }}>
-              ⚠ Conflicts with {conflictingBands.length === 1 ? 'another band' : `${conflictingBands.length} bands`} on your schedule:
-            </div>
-            {conflictingBands.map(c => {
-              const cs = STAGE_BY_ID[c.stage];
-              return (
-                <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <div>
-                    <span style={{ fontSize: 13, color: '#F5F1EA', fontWeight: 600 }}>{c.name}</span>
-                    <span style={{ fontSize: 11, color: 'rgba(245,241,234,0.5)', marginLeft: 8 }}>{fmtTimeShort(c.start)}–{fmtTimeShort(c.end)} · {cs.name}</span>
-                  </div>
-                  <button onClick={() => { onRemoveConflict(c); onClose(); }} style={{
-                    border: 0, background: 'rgba(220,80,70,0.25)', color: '#FFB4A8',
-                    fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
-                  }}>Drop it</button>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        {/* Video preview */}
+        <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', flexShrink: 0 }}>
+          <VideoPreview band={band} stage={stage} />
+        </div>
 
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} style={{
-            flex: 1, padding: '13px 0', border: '1px solid rgba(245,241,234,0.15)',
-            background: 'transparent', color: '#F5F1EA',
-            fontSize: 14, fontWeight: 600, borderRadius: 12, cursor: 'pointer',
-          }}>Close</button>
-          <button onClick={() => { onRemove(band); onClose(); }} style={{
-            flex: 1, padding: '13px 0', border: 0,
-            background: 'rgba(220,80,70,0.2)', color: '#FFB4A8',
-            fontSize: 14, fontWeight: 600, borderRadius: 12, cursor: 'pointer',
-          }}>Remove from schedule</button>
+        {/* Scrollable info + actions */}
+        <div style={{ overflowY: 'auto', padding: '16px 20px 32px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Band info */}
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'Georgia, serif', color: '#F5F1EA', marginBottom: 4 }}>{band.name}</div>
+            <div style={{ fontSize: 13, color: 'rgba(245,241,234,0.6)', marginBottom: 4 }}>{day?.label} · {fmtTime(band.start)}–{fmtTime(band.end)}</div>
+            <div style={{
+              display: 'inline-block', fontSize: 11, color: '#fff', fontWeight: 600,
+              textTransform: 'uppercase', letterSpacing: 0.4,
+              background: stage.tone, padding: '3px 8px', borderRadius: 4,
+            }}>{stage.name}</div>
+          </div>
+
+          {/* Conflict warning */}
+          {conflictingBands.length > 0 && (
+            <div style={{
+              background: 'rgba(220,80,70,0.12)', border: '1px solid rgba(220,80,70,0.3)',
+              borderRadius: 10, padding: '10px 12px',
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#FFB4A8', marginBottom: 8 }}>
+                ⚠ Conflicts with {conflictingBands.length === 1 ? 'another band' : `${conflictingBands.length} bands`}:
+              </div>
+              {conflictingBands.map(c => {
+                const cs = STAGE_BY_ID[c.stage];
+                return (
+                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <div>
+                      <span style={{ fontSize: 13, color: '#F5F1EA', fontWeight: 600 }}>{c.name}</span>
+                      <span style={{ fontSize: 11, color: 'rgba(245,241,234,0.5)', marginLeft: 8 }}>{fmtTimeShort(c.start)}–{fmtTimeShort(c.end)} · {cs.name}</span>
+                    </div>
+                    <button onClick={() => { onRemoveConflict(c); onClose(); }} style={{
+                      border: 0, background: 'rgba(220,80,70,0.25)', color: '#FFB4A8',
+                      fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+                    }}>Drop it</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={onClose} style={{
+              flex: 1, padding: '13px 0', border: '1px solid rgba(245,241,234,0.15)',
+              background: 'transparent', color: '#F5F1EA',
+              fontSize: 14, fontWeight: 600, borderRadius: 12, cursor: 'pointer',
+            }}>Close</button>
+            <button onClick={() => { onRemove(band); onClose(); }} style={{
+              flex: 1, padding: '13px 0', border: 0,
+              background: 'rgba(220,80,70,0.2)', color: '#FFB4A8',
+              fontSize: 14, fontWeight: 600, borderRadius: 12, cursor: 'pointer',
+            }}>Remove</button>
+          </div>
         </div>
       </div>
     </div>
