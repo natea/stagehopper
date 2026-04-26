@@ -39,7 +39,7 @@ const nowMinutes = () => {
   return d.getHours() * 60 + d.getMinutes();
 };
 
-const todayDate = () => new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+const todayDate = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 
 // Greedy lane algorithm: same-stage consecutive shows share a lane.
 function computeLanes(dayBands) {
@@ -117,9 +117,10 @@ function scheduleLocalNotifications(scheduledBands) {
 }
 
 // LocalStorage keys
-const LS_KEY = 'jf26.schedule.v3';
-const LS_REJECT = 'jf26.rejected.v3';
-const LS_DAY = 'jf26.activeDay.v3';
+const LS_KEY      = 'jf26.schedule.v3';
+const LS_REJECT   = 'jf26.rejected.v3';
+const LS_DAY      = 'jf26.activeDay.v3';
+const LS_TOPPICKS = 'jf26.topPicks.v1';
 
 const loadSet = (key) => {
   try { return new Set(JSON.parse(localStorage.getItem(key) || '[]')); }
@@ -797,21 +798,21 @@ function DragHandle() {
   );
 }
 
-function MineBandSheet({ band, conflictingBands, onClose, onRemove, onRemoveConflict }) {
+function MineBandSheet({ band, conflictingBands, onClose, onRemove, onRemoveConflict, userTopPicks, onTopPickChange }) {
   if (!band) return null;
 
   const hasConflicts = conflictingBands.length > 0;
   // All bands in the conflict group
   const allBands = useMemo(() => [band, ...conflictingBands], [band, conflictingBands]);
 
-  // Initial order: put computeTopPicks winner first (matches ScheduleView highlighting)
+  // Initial order: put computeTopPicks winner (respecting user overrides) first
   const [order, setOrder] = useState(() => {
-    const topIds = computeTopPicks(allBands);
+    const topIds = computeTopPicks(allBands, userTopPicks);
     const topId = allBands.find(b => topIds.has(b.id))?.id ?? allBands[0].id;
     return [topId, ...allBands.filter(b => b.id !== topId).map(b => b.id)];
   });
   const [previewId, setPreviewId] = useState(() => {
-    const topIds = computeTopPicks(allBands);
+    const topIds = computeTopPicks(allBands, userTopPicks);
     return allBands.find(b => topIds.has(b.id))?.id ?? band.id;
   });
 
@@ -861,12 +862,17 @@ function MineBandSheet({ band, conflictingBands, onClose, onRemove, onRemoveConf
 
   const onDragEnd = () => { dragState.current = null; };
 
+  const handleClose = () => {
+    if (onTopPickChange && order[0]) onTopPickChange(order[0]);
+    onClose();
+  };
+
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 110,
       background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)',
       display: 'flex', alignItems: 'flex-end',
-    }} onClick={onClose}>
+    }} onClick={handleClose}>
       <div onClick={e => e.stopPropagation()} style={{
         background: '#1A1816', borderRadius: '20px 20px 0 0',
         width: '100%', maxHeight: '88vh',
@@ -874,9 +880,19 @@ function MineBandSheet({ band, conflictingBands, onClose, onRemove, onRemoveConf
         boxShadow: '0 -8px 40px rgba(0,0,0,0.6)',
         overflow: 'hidden',
       }}>
-        {/* Sheet handle */}
-        <div style={{ padding: '14px 20px 0', flexShrink: 0 }}>
+        {/* Sheet handle + close */}
+        <div style={{ position: 'relative', padding: '14px 20px 0', flexShrink: 0 }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(245,241,234,0.2)', margin: '0 auto' }} />
+          <button
+            onClick={e => { e.stopPropagation(); handleClose(); }}
+            style={{
+              position: 'absolute', top: 8, right: 16,
+              width: 30, height: 30, borderRadius: 15,
+              border: 0, background: 'rgba(245,241,234,0.12)', color: 'rgba(245,241,234,0.7)',
+              fontSize: 18, lineHeight: '30px', textAlign: 'center',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >×</button>
         </div>
 
         {/* Video — switches when tapping a row */}
@@ -943,7 +959,7 @@ function MineBandSheet({ band, conflictingBands, onClose, onRemove, onRemoveConf
                     <button
                       onClick={e => {
                         e.stopPropagation();
-                        if (isOriginalBand) { onRemove(b); onClose(); }
+                        if (isOriginalBand) { onRemove(b); handleClose(); }
                         else onRemoveConflict(b);
                       }}
                       style={{
@@ -968,13 +984,13 @@ function MineBandSheet({ band, conflictingBands, onClose, onRemove, onRemoveConf
 
           {/* Close / Remove row */}
           <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-            <button onClick={onClose} style={{
+            <button onClick={handleClose} style={{
               flex: 1, padding: '13px 0', border: '1px solid rgba(245,241,234,0.15)',
               background: 'transparent', color: '#F5F1EA',
               fontSize: 14, fontWeight: 600, borderRadius: 12, cursor: 'pointer',
             }}>Close</button>
             {!hasConflicts && (
-              <button onClick={() => { onRemove(band); onClose(); }} style={{
+              <button onClick={() => { onRemove(band); handleClose(); }} style={{
                 flex: 1, padding: '13px 0', border: 0,
                 background: 'rgba(220,80,70,0.2)', color: '#FFB4A8',
                 fontSize: 14, fontWeight: 600, borderRadius: 12, cursor: 'pointer',
@@ -999,8 +1015,9 @@ const STAGE_ABBREV = {
   children: "Children's", miner: 'A. Miner',
 };
 
-// For each conflict cluster, pick the "top pick" — fewest conflicts, then canonical stage order.
-function computeTopPicks(dayBands) {
+// For each conflict cluster, pick the "top pick".
+// userOverrides: Set of band IDs the user has manually dragged to #1 — takes priority.
+function computeTopPicks(dayBands, userOverrides = null) {
   const stageOrder = Object.fromEntries(window.STAGES.map((s, i) => [s.id, i]));
   const topPicks = new Set();
   const visited = new Set();
@@ -1021,18 +1038,24 @@ function computeTopPicks(dayBands) {
     if (cluster.length === 1) {
       topPicks.add(cluster[0].id);
     } else {
-      const sorted = [...cluster].sort((a, b) => {
-        const aC = cluster.filter(o => o.id !== a.id && overlap(o, a)).length;
-        const bC = cluster.filter(o => o.id !== b.id && overlap(o, b)).length;
-        return aC !== bC ? aC - bC : stageOrder[a.stage] - stageOrder[b.stage];
-      });
-      topPicks.add(sorted[0].id);
+      // User-manual pick wins if one exists in this cluster
+      const userPick = userOverrides && cluster.find(b => userOverrides.has(b.id));
+      if (userPick) {
+        topPicks.add(userPick.id);
+      } else {
+        const sorted = [...cluster].sort((a, b) => {
+          const aC = cluster.filter(o => o.id !== a.id && overlap(o, a)).length;
+          const bC = cluster.filter(o => o.id !== b.id && overlap(o, b)).length;
+          return aC !== bC ? aC - bC : stageOrder[a.stage] - stageOrder[b.stage];
+        });
+        topPicks.add(sorted[0].id);
+      }
     }
   }
   return topPicks;
 }
 
-function ScheduleView({ scheduled, activeDay, onRemove }) {
+function ScheduleView({ scheduled, activeDay, onRemove, userTopPicks, onTopPickChange }) {
   const [previewBand, setPreviewBand] = useState(null);
   const headerRef  = useRef(null); // stage name row — syncs scrollLeft with body
   const timeRef    = useRef(null); // frozen time axis — syncs scrollTop with body
@@ -1042,7 +1065,7 @@ function ScheduleView({ scheduled, activeDay, onRemove }) {
     .filter(b => b.day === activeDay)
     .sort((a, b) => toMin(a.start) - toMin(b.start));
 
-  const topPicks = useMemo(() => computeTopPicks(dayBands), [dayBands]);
+  const topPicks = useMemo(() => computeTopPicks(dayBands, userTopPicks), [dayBands, userTopPicks]);
 
   const conflictIds = useMemo(() => {
     const ids = new Set();
@@ -1274,7 +1297,9 @@ function ScheduleView({ scheduled, activeDay, onRemove }) {
         <MineBandSheet
           band={previewBand}
           conflictingBands={conflictsOf(previewBand)}
+          userTopPicks={userTopPicks}
           onClose={() => setPreviewBand(null)}
+          onTopPickChange={onTopPickChange}
           onRemove={(b) => { onRemove(b); setPreviewBand(null); }}
           onRemoveConflict={(b) => { onRemove(b); }}
         />
@@ -1499,6 +1524,7 @@ function App() {
   const [scheduledIds, setScheduledIds] = useState(() => loadSet(LS_KEY));
   const [rejectedIds, setRejectedIds] = useState(() => loadSet(LS_REJECT));
   const [activeDay, setActiveDay] = useState(() => localStorage.getItem(LS_DAY) || 'd3');
+  const [userTopPicks, setUserTopPicks] = useState(() => loadSet(LS_TOPPICKS));
   const [view, setView] = useState('discover');
   const [soundOn, setSoundOn] = useState(t.soundOn);
   const [undoStack, setUndoStack] = useState([]);
@@ -1514,6 +1540,7 @@ function App() {
   useEffect(() => saveSet(LS_KEY, scheduledIds), [scheduledIds]);
   useEffect(() => saveSet(LS_REJECT, rejectedIds), [rejectedIds]);
   useEffect(() => localStorage.setItem(LS_DAY, activeDay), [activeDay]);
+  useEffect(() => saveSet(LS_TOPPICKS, userTopPicks), [userTopPicks]);
 
   // If we changed mode and activeDay is no longer in days, reset
   useEffect(() => {
@@ -1679,6 +1706,12 @@ function App() {
           scheduled={scheduledBands}
           activeDay={activeDay}
           onRemove={handleRemove}
+          userTopPicks={userTopPicks}
+          onTopPickChange={(bandId) => setUserTopPicks(prev => {
+            const n = new Set(prev);
+            n.add(bandId);
+            return n;
+          })}
         />
       )}
 
