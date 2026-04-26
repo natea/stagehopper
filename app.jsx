@@ -786,7 +786,7 @@ function AboutSheet({ open, onClose }) {
               </div>
             </div>
             <div style={{ marginTop: 24, fontSize: 11, color: 'rgba(245,241,234,0.25)', textAlign: 'center' }}>
-              v47
+              v49
             </div>
           </div>
         </div>
@@ -1456,7 +1456,7 @@ function BandPreviewSheet({ band, onClose, scheduledIds, onAdd, onRemove }) {
   const added = scheduledIds.has(band.id);
   return (
     <div
-      style={{ position: 'fixed', inset: 0, zIndex: 150, background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'flex-end' }}
+      style={{ position: 'fixed', inset: 0, zIndex: 210, background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'flex-end' }}
       onClick={onClose}
     >
       <div onClick={e => e.stopPropagation()} style={{
