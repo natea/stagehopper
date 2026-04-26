@@ -175,16 +175,7 @@ function YouTubeEmbed({ id, band, stage, autoPlay, onFallback }) {
         allow="autoplay; encrypted-media; picture-in-picture"
         allowFullScreen
       />
-      {/* Verified badge */}
-      <div style={{
-        position: 'absolute', top: 12, right: 12, zIndex: 5,
-        background: 'rgba(0,0,0,0.6)', color: '#A7F3D0',
-        fontSize: 10, fontWeight: 700, letterSpacing: 0.6,
-        padding: '4px 8px', borderRadius: 4,
-        textTransform: 'uppercase',
-        backdropFilter: 'blur(8px)',
-        pointerEvents: 'none',
-      }}>● Live clip</div>
+
       {/* Escape hatch for embeds that fail silently (no postMessage error) */}
       <button
         onPointerDown={(e) => e.stopPropagation()}
