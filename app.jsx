@@ -1344,9 +1344,126 @@ function ScheduleView({ scheduled, activeDay, onRemove, userTopPicks, onTopPickC
 
 // ─────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────
+// Band preview sheet (used by grid view)
+// ─────────────────────────────────────────────────────────────
+function BandPreviewSheet({ band, onClose, scheduledIds, onAdd, onRemove }) {
+  if (!band) return null;
+  const stage = STAGE_BY_ID[band.stage];
+  const day   = DAY_BY_ID[band.day];
+  const added = scheduledIds.has(band.id);
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 150, background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'flex-end' }}
+      onClick={onClose}
+    >
+      <div onClick={e => e.stopPropagation()} style={{
+        background: '#1A1816', borderRadius: '20px 20px 0 0',
+        width: '100%', maxHeight: '80vh',
+        display: 'flex', flexDirection: 'column',
+        boxShadow: '0 -8px 40px rgba(0,0,0,0.6)', overflow: 'hidden',
+      }}>
+        {/* Handle + close */}
+        <div style={{ position: 'relative', padding: '14px 20px 0', flexShrink: 0 }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(245,241,234,0.2)', margin: '0 auto' }} />
+          <button onClick={onClose} style={{
+            position: 'absolute', top: 8, right: 16,
+            width: 30, height: 30, borderRadius: 15,
+            border: 0, background: 'rgba(245,241,234,0.12)', color: 'rgba(245,241,234,0.7)',
+            fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>×</button>
+        </div>
+        {/* Video */}
+        <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', flexShrink: 0 }}>
+          <VideoPreview band={band} stage={stage} autoPlay={true} />
+        </div>
+        {/* Info */}
+        <div style={{ overflowY: 'auto', padding: '14px 18px 32px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 700, color: '#F5F1EA', lineHeight: 1.15 }}>{band.name}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.4, background: stage.tone, color: '#fff', padding: '3px 8px', borderRadius: 4, textTransform: 'uppercase' }}>{stage.name}</div>
+            <span style={{ fontSize: 13, color: 'rgba(245,241,234,0.6)' }}>{day?.label} · {fmtTime(band.start)}–{fmtTime(band.end)}</span>
+          </div>
+          {band.blurb && <p style={{ fontSize: 14, lineHeight: 1.5, color: 'rgba(245,241,234,0.8)', margin: 0 }}>{band.blurb}</p>}
+          {band.members && <p style={{ fontSize: 12, color: 'rgba(245,241,234,0.45)', margin: 0 }}>👥 {band.members}</p>}
+          <button
+            onClick={() => { added ? onRemove(band) : onAdd(band); onClose(); }}
+            style={{
+              marginTop: 4, padding: '12px', borderRadius: 12, border: 0,
+              background: added ? 'rgba(220,80,70,0.2)' : stage.tone,
+              color: added ? '#FFB4A8' : '#fff',
+              fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >{added ? '✕ Remove from My Schedule' : '＋ Add to My Schedule'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GridBlock({ band, top, height, added, tone, onTap, onLongPress }) {
+  const timerRef  = useRef(null);
+  const movedRef  = useRef(false);
+  const startRef  = useRef(null);
+
+  const cancel = () => { clearTimeout(timerRef.current); timerRef.current = null; };
+
+  const onPointerDown = (e) => {
+    movedRef.current = false;
+    startRef.current = { x: e.clientX, y: e.clientY };
+    timerRef.current = setTimeout(() => {
+      if (!movedRef.current) { cancel(); onLongPress(); }
+    }, 500);
+  };
+
+  const onPointerMove = (e) => {
+    if (!startRef.current) return;
+    const dx = e.clientX - startRef.current.x;
+    const dy = e.clientY - startRef.current.y;
+    if (Math.abs(dx) > 6 || Math.abs(dy) > 6) { movedRef.current = true; cancel(); }
+  };
+
+  const onPointerUp = () => {
+    if (timerRef.current) { cancel(); if (!movedRef.current) onTap(); }
+    startRef.current = null;
+  };
+
+  return (
+    <div
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={cancel}
+      style={{
+        position: 'absolute', top, left: 2, right: 2, height,
+        background: added ? tone : tone + '1A',
+        border: `1px solid ${tone}${added ? 'cc' : '44'}`,
+        borderLeft: `3px solid ${tone}`,
+        borderRadius: 4, padding: '2px 4px',
+        overflow: 'hidden', cursor: 'pointer', userSelect: 'none',
+        WebkitUserSelect: 'none', touchAction: 'none',
+        zIndex: 2,
+      }}
+    >
+      <div style={{
+        fontSize: 9, fontWeight: 700, lineHeight: 1.25,
+        color: added ? '#fff' : '#F5F1EA',
+        overflow: 'hidden', display: '-webkit-box',
+        WebkitLineClamp: height > 28 ? 2 : 1, WebkitBoxOrient: 'vertical',
+      }}>{band.name}</div>
+      {height > 32 && (
+        <div style={{ fontSize: 8, color: added ? 'rgba(255,255,255,0.75)' : 'rgba(245,241,234,0.45)', marginTop: 1 }}>
+          {fmtTime(band.start)}–{fmtTime(band.end)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // Official Schedule grid view
 // ─────────────────────────────────────────────────────────────
 function GridView({ activeDay, bands, scheduledIds, onAdd, onRemove }) {
+  const [previewBand, setPreviewBand] = useState(null);
   const dayBands = useMemo(() => bands.filter(b => b.day === activeDay), [bands, activeDay]);
   const stages = useMemo(() =>
     window.STAGES.filter(s => dayBands.some(b => b.stage === s.id)),
@@ -1443,31 +1560,16 @@ function GridView({ activeDay, bands, scheduledIds, onAdd, onRemove }) {
                 const height = Math.max((toMin(band.end) - toMin(band.start)) * PX_PER_MIN - 2, 20);
                 const added  = scheduledIds.has(band.id);
                 return (
-                  <button
+                  <GridBlock
                     key={band.id}
-                    onClick={() => added ? onRemove(band) : onAdd(band)}
-                    style={{
-                      position: 'absolute', top, left: 2, right: 2, height,
-                      background: added ? s.tone : s.tone + '1A',
-                      border: `1px solid ${s.tone}${added ? 'cc' : '44'}`,
-                      borderLeft: `3px solid ${s.tone}`,
-                      borderRadius: 4, padding: '2px 4px',
-                      overflow: 'hidden', cursor: 'pointer', textAlign: 'left',
-                      zIndex: 2,
-                    }}
-                  >
-                    <div style={{
-                      fontSize: 9, fontWeight: 700, lineHeight: 1.25,
-                      color: added ? '#fff' : '#F5F1EA',
-                      overflow: 'hidden', display: '-webkit-box',
-                      WebkitLineClamp: height > 28 ? 2 : 1, WebkitBoxOrient: 'vertical',
-                    }}>{band.name}</div>
-                    {height > 32 && (
-                      <div style={{ fontSize: 8, color: added ? 'rgba(255,255,255,0.75)' : 'rgba(245,241,234,0.45)', marginTop: 1 }}>
-                        {fmtTime(band.start)}–{fmtTime(band.end)}
-                      </div>
-                    )}
-                  </button>
+                    band={band}
+                    top={top}
+                    height={height}
+                    added={added}
+                    tone={s.tone}
+                    onTap={() => added ? onRemove(band) : onAdd(band)}
+                    onLongPress={() => setPreviewBand(band)}
+                  />
                 );
               })}
             </div>
@@ -1477,6 +1579,14 @@ function GridView({ activeDay, bands, scheduledIds, onAdd, onRemove }) {
         {/* Bottom padding */}
         <div style={{ height: 24 }} />
       </div>
+
+      <BandPreviewSheet
+        band={previewBand}
+        onClose={() => setPreviewBand(null)}
+        scheduledIds={scheduledIds}
+        onAdd={onAdd}
+        onRemove={onRemove}
+      />
     </div>
   );
 }
