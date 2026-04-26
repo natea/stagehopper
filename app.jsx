@@ -136,12 +136,25 @@ const saveSet = (key, set) =>
 // ─────────────────────────────────────────────────────────────
 function YouTubeEmbed({ id, band, stage, autoPlay, onFallback }) {
   const [failed, setFailed] = useState(false);
-  // Detect embed failures: poll the iframe for "embed disabled" error which
-  // shows in the iframe's body. Easiest signal: listen to YT IFrame API
-  // postMessage. Simpler: catch onError on the iframe and use a timeout to
-  // check if the iframe loaded a YouTube error page (we can't read it cross-
-  // origin, so we rely on a "Switch to search" button overlay the user can tap).
+  const iframeRef = useRef(null);
+
+  // YT IFrame API fires postMessage with error codes 100, 101, 150 when a
+  // video is unavailable or embedding is disabled. Auto-fall back immediately.
+  useEffect(() => {
+    const handle = (e) => {
+      if (!e.origin.includes('youtube.com')) return;
+      try {
+        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+        if (data?.event === 'infoDelivery' && data?.info?.error) setFailed(true);
+        if (data?.event === 'onError' || (data?.info && [100, 101, 150].includes(data.info.error))) setFailed(true);
+      } catch {}
+    };
+    window.addEventListener('message', handle);
+    return () => window.removeEventListener('message', handle);
+  }, [id]);
+
   if (failed) return <YouTubeSearchTile band={band} stage={stage} />;
+
   // Note: YouTube embeds throw Error 153 when loaded from file:// — the player
   // can't validate the origin. Hosting over http(s) (PWA) makes them work.
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -153,6 +166,7 @@ function YouTubeEmbed({ id, band, stage, autoPlay, onFallback }) {
   return (
     <>
       <iframe
+        ref={iframeRef}
         src={src}
         style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%',
@@ -171,7 +185,7 @@ function YouTubeEmbed({ id, band, stage, autoPlay, onFallback }) {
         backdropFilter: 'blur(8px)',
         pointerEvents: 'none',
       }}>● Live clip</div>
-      {/* Always-visible "trouble? search instead" escape hatch in the corner */}
+      {/* Escape hatch for embeds that fail silently (no postMessage error) */}
       <button
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => { e.stopPropagation(); setFailed(true); }}
