@@ -900,7 +900,7 @@ function MineBandSheet({ band, conflictingBands, onClose, onRemove, onRemoveConf
     }} onClick={handleClose}>
       <div onClick={e => e.stopPropagation()} style={{
         background: '#1A1816', borderRadius: '20px 20px 0 0',
-        width: '100%', maxHeight: '88vh',
+        width: '100%', minHeight: '60vh', maxHeight: '88vh',
         display: 'flex', flexDirection: 'column',
         boxShadow: '0 -8px 40px rgba(0,0,0,0.6)',
         overflow: 'hidden',
