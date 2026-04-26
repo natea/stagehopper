@@ -4,6 +4,8 @@
 
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
+const APP_VERSION = 'v50';
+
 // ─────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────
@@ -702,7 +704,7 @@ function HamburgerMenu({ open, onClose, onShowIntro, onShowAbout }) {
           color: 'rgba(245,241,234,0.25)', lineHeight: 1.5,
         }}>
           New Orleans Jazz &amp; Heritage Festival<br />April 23 – May 3, 2026
-          <br /><strong style={{ color: 'rgba(245,241,234,0.55)' }}>v50</strong>
+          <br /><strong style={{ color: 'rgba(245,241,234,0.55)' }}>{APP_VERSION}</strong>
         </p>
       </div>
     </>
@@ -787,7 +789,7 @@ function AboutSheet({ open, onClose }) {
               </div>
             </div>
             <div style={{ marginTop: 24, fontSize: 11, color: 'rgba(245,241,234,0.25)', textAlign: 'center' }}>
-              v50
+              {APP_VERSION}
             </div>
           </div>
         </div>
