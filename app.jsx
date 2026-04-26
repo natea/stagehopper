@@ -391,14 +391,14 @@ function BandCard({ band, top, onSwipe, scheduled, autoPlay, onToggleAutoPlay })
         <p style={{
           margin: '4px 0 0', fontSize: 14, lineHeight: 1.45,
           color: 'rgba(245,241,234,0.85)',
-          display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical',
+          display: '-webkit-box', WebkitLineClamp: conflicts.length > 0 ? 2 : 4, WebkitBoxOrient: 'vertical',
           overflow: 'hidden',
         }}>{band.blurb}</p>
 
         {/* Conflict warning */}
         {conflicts.length > 0 && (
           <div style={{
-            marginTop: 'auto',
+            marginTop: 6,
             background: 'rgba(220, 80, 70, 0.14)',
             border: '1px solid rgba(220, 80, 70, 0.4)',
             color: '#FFB4A8',
