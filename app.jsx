@@ -729,6 +729,21 @@ function HamburgerBtn({ onClick }) {
 function ViewToggle({ view, setView, scheduledCount }) {
   const hasPicks = scheduledCount > 0;
   const mineIsActive = view === 'schedule';
+  const btn = (id, label, extra = {}) => {
+    const active = view === id;
+    return (
+      <button onClick={() => setView(id)} style={{
+        border: 0,
+        background: active ? '#F5F1EA' : (extra.activeBg && !active ? extra.activeBg : 'transparent'),
+        color: active ? '#0F0E0C' : (extra.activeBg && !active ? '#0F0E0C' : 'rgba(245,241,234,0.7)'),
+        fontSize: 11, fontWeight: active ? 700 : 600, padding: '6px 9px',
+        borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 0.1,
+        whiteSpace: 'nowrap',
+        animation: extra.pulse ? 'mine-pulse 1.8s ease-in-out infinite' : 'none',
+        transition: 'background 0.2s, color 0.2s',
+      }}>{label}</button>
+    );
+  };
   return (
     <>
       <style>{`
@@ -738,25 +753,12 @@ function ViewToggle({ view, setView, scheduledCount }) {
         }
       `}</style>
       <div style={{ display: 'flex', gap: 4, padding: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 10 }}>
-        <button onClick={() => setView('discover')} style={{
-          border: 0,
-          background: view === 'discover' ? '#F5F1EA' : 'transparent',
-          color: view === 'discover' ? '#0F0E0C' : 'rgba(245,241,234,0.7)',
-          fontSize: 12, fontWeight: 600, padding: '6px 12px',
-          borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 0.2,
-        }}>Discover</button>
-
-        <button onClick={() => setView('schedule')} style={{
-          border: 0,
-          background: mineIsActive ? '#F5F1EA' : hasPicks ? '#FBBF24' : 'transparent',
-          color: mineIsActive ? '#0F0E0C' : hasPicks ? '#0F0E0C' : 'rgba(245,241,234,0.7)',
-          fontSize: 12, fontWeight: 700, padding: '6px 12px',
-          borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 0.2,
-          animation: hasPicks && !mineIsActive ? 'mine-pulse 1.8s ease-in-out infinite' : 'none',
-          transition: 'background 0.2s, color 0.2s',
-        }}>
-          Mine · {scheduledCount}
-        </button>
+        {btn('discover', 'Discover')}
+        {btn('schedule', `Mine · ${scheduledCount}`, {
+          activeBg: hasPicks && !mineIsActive ? '#FBBF24' : undefined,
+          pulse: hasPicks && !mineIsActive,
+        })}
+        {btn('grid', 'Official Schedule')}
       </div>
     </>
   );
@@ -1341,6 +1343,144 @@ function ScheduleView({ scheduled, activeDay, onRemove, userTopPicks, onTopPickC
 }
 
 // ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Official Schedule grid view
+// ─────────────────────────────────────────────────────────────
+function GridView({ activeDay, bands, scheduledIds, onAdd, onRemove }) {
+  const dayBands = useMemo(() => bands.filter(b => b.day === activeDay), [bands, activeDay]);
+  const stages = useMemo(() =>
+    window.STAGES.filter(s => dayBands.some(b => b.stage === s.id)),
+    [dayBands]
+  );
+
+  const START_MIN = 11 * 60;  // 11:00 AM
+  const END_MIN   = 19 * 60;  // 7:00 PM
+  const PX_PER_MIN = 1.6;
+  const GRID_H   = (END_MIN - START_MIN) * PX_PER_MIN;
+  const COL_W    = 88;
+  const TIME_W   = 42;
+  const HEADER_H = 60;
+
+  const fmtMin = (m) => {
+    const h = Math.floor(m / 60) % 12 || 12;
+    const min = m % 60;
+    return `${h}:${String(min).padStart(2,'0')}`;
+  };
+
+  const timeMarks = [];
+  for (let m = START_MIN; m <= END_MIN; m += 30) timeMarks.push(m);
+
+  return (
+    <div style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      <div style={{ position: 'relative', width: TIME_W + stages.length * COL_W, minHeight: HEADER_H + GRID_H + 24 }}>
+
+        {/* Sticky stage header row */}
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 20,
+          display: 'flex', height: HEADER_H,
+          background: '#0F0E0C',
+          borderBottom: '1px solid rgba(255,255,255,0.1)',
+        }}>
+          {/* Corner cell */}
+          <div style={{ width: TIME_W, flexShrink: 0, position: 'sticky', left: 0, zIndex: 21, background: '#0F0E0C' }} />
+          {stages.map(s => (
+            <div key={s.id} style={{
+              width: COL_W, flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '6px 4px',
+              borderLeft: `2px solid ${s.tone}55`,
+            }}>
+              <div style={{
+                fontSize: 9, fontWeight: 800, letterSpacing: 0.4,
+                color: s.tone, textTransform: 'uppercase', textAlign: 'center',
+                lineHeight: 1.25,
+              }}>{s.name}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Body: time axis + band blocks */}
+        <div style={{ position: 'relative', display: 'flex', height: GRID_H }}>
+
+          {/* Sticky time gutter */}
+          <div style={{
+            position: 'sticky', left: 0, width: TIME_W, flexShrink: 0,
+            zIndex: 10, background: '#0F0E0C',
+            borderRight: '1px solid rgba(255,255,255,0.08)',
+          }}>
+            {timeMarks.map(m => (
+              <div key={m} style={{
+                position: 'absolute',
+                top: (m - START_MIN) * PX_PER_MIN - 7,
+                right: 4, left: 0, textAlign: 'right',
+                fontSize: 9, color: 'rgba(245,241,234,0.35)',
+                fontVariantNumeric: 'tabular-nums', lineHeight: 1,
+              }}>
+                {fmtMin(m)}
+              </div>
+            ))}
+          </div>
+
+          {/* Horizontal grid lines */}
+          <div style={{ position: 'absolute', left: TIME_W, right: 0, top: 0, height: GRID_H, pointerEvents: 'none', zIndex: 1 }}>
+            {timeMarks.map(m => (
+              <div key={m} style={{
+                position: 'absolute', top: (m - START_MIN) * PX_PER_MIN,
+                left: 0, right: 0, height: 1,
+                background: m % 60 === 0 ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)',
+              }} />
+            ))}
+          </div>
+
+          {/* Stage columns */}
+          {stages.map(s => (
+            <div key={s.id} style={{
+              position: 'relative', width: COL_W, flexShrink: 0,
+              borderLeft: '1px solid rgba(255,255,255,0.05)',
+            }}>
+              {dayBands.filter(b => b.stage === s.id).map(band => {
+                const top    = (toMin(band.start) - START_MIN) * PX_PER_MIN;
+                const height = Math.max((toMin(band.end) - toMin(band.start)) * PX_PER_MIN - 2, 20);
+                const added  = scheduledIds.has(band.id);
+                return (
+                  <button
+                    key={band.id}
+                    onClick={() => added ? onRemove(band) : onAdd(band)}
+                    style={{
+                      position: 'absolute', top, left: 2, right: 2, height,
+                      background: added ? s.tone : s.tone + '1A',
+                      border: `1px solid ${s.tone}${added ? 'cc' : '44'}`,
+                      borderLeft: `3px solid ${s.tone}`,
+                      borderRadius: 4, padding: '2px 4px',
+                      overflow: 'hidden', cursor: 'pointer', textAlign: 'left',
+                      zIndex: 2,
+                    }}
+                  >
+                    <div style={{
+                      fontSize: 9, fontWeight: 700, lineHeight: 1.25,
+                      color: added ? '#fff' : '#F5F1EA',
+                      overflow: 'hidden', display: '-webkit-box',
+                      WebkitLineClamp: height > 28 ? 2 : 1, WebkitBoxOrient: 'vertical',
+                    }}>{band.name}</div>
+                    {height > 32 && (
+                      <div style={{ fontSize: 8, color: added ? 'rgba(255,255,255,0.75)' : 'rgba(245,241,234,0.45)', marginTop: 1 }}>
+                        {fmtTime(band.start)}–{fmtTime(band.end)}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+
+        {/* Bottom padding */}
+        <div style={{ height: 24 }} />
+      </div>
+    </div>
+  );
+}
+
 // Discover (swipe stack) view
 // ─────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────
@@ -1714,7 +1854,15 @@ function App() {
         onSearchOpen={() => setSearchOpen(true)}
       />
 
-      {view === 'discover' ? (
+      {view === 'grid' ? (
+        <GridView
+          activeDay={activeDay}
+          bands={bands}
+          scheduledIds={scheduledIds}
+          onAdd={(band) => setScheduledIds(prev => new Set([...prev, band.id]))}
+          onRemove={(band) => setScheduledIds(prev => { const n = new Set(prev); n.delete(band.id); return n; })}
+        />
+      ) : view === 'discover' ? (
         <DiscoverView
           deck={deck}
           slotContext={slotContext}
