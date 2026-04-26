@@ -787,7 +787,7 @@ function AboutSheet({ open, onClose }) {
               </div>
             </div>
             <div style={{ marginTop: 24, fontSize: 11, color: 'rgba(245,241,234,0.25)', textAlign: 'center' }}>
-              v49
+              v50
             </div>
           </div>
         </div>
@@ -1572,6 +1572,7 @@ function GridBlock({ band, top, height, added, tone, onTap, onLongPress }) {
 // ─────────────────────────────────────────────────────────────
 function GridView({ activeDay, bands, scheduledIds, onAdd, onRemove }) {
   const [previewBand, setPreviewBand] = useState(null);
+  const scrollRef = useRef(null);
   const dayBands = useMemo(() => bands.filter(b => b.day === activeDay), [bands, activeDay]);
   const stages = useMemo(() =>
     window.STAGES.filter(s => dayBands.some(b => b.stage === s.id)),
@@ -1586,6 +1587,29 @@ function GridView({ activeDay, bands, scheduledIds, onAdd, onRemove }) {
   const TIME_W   = 42;
   const HEADER_H = 60;
 
+  const isToday = DAY_BY_ID[activeDay]?.date === todayDate();
+  const nowMin  = nowMinutes();
+  const nowPx   = isToday && nowMin >= START_MIN && nowMin <= END_MIN
+    ? (nowMin - START_MIN) * PX_PER_MIN
+    : null;
+
+  // Auto-scroll to now (today) or first show (other days) when day changes
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let targetPx;
+    if (isToday) {
+      targetPx = nowPx ?? 0;
+    } else {
+      const firstStart = dayBands.length
+        ? Math.min(...dayBands.map(b => toMin(b.start)))
+        : START_MIN;
+      targetPx = (firstStart - START_MIN) * PX_PER_MIN;
+    }
+    // Place the target ~25% from the top of the visible area
+    el.scrollTop = Math.max(0, targetPx - el.clientHeight * 0.25);
+  }, [activeDay]);
+
   const fmtMin = (m) => {
     const h = Math.floor(m / 60) % 12 || 12;
     const min = m % 60;
@@ -1596,7 +1620,7 @@ function GridView({ activeDay, bands, scheduledIds, onAdd, onRemove }) {
   for (let m = START_MIN; m <= END_MIN; m += 30) timeMarks.push(m);
 
   return (
-    <div style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch' }}>
+    <div ref={scrollRef} style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch' }}>
       <div style={{ position: 'relative', width: TIME_W + stages.length * COL_W, minHeight: HEADER_H + GRID_H + 24 }}>
 
         {/* Sticky stage header row */}
@@ -1644,6 +1668,17 @@ function GridView({ activeDay, bands, scheduledIds, onAdd, onRemove }) {
                 {fmtMin(m)}
               </div>
             ))}
+            {/* Now time label in gutter */}
+            {nowPx !== null && (
+              <div style={{
+                position: 'absolute', top: nowPx - 7,
+                right: 4, left: 0, textAlign: 'right',
+                fontSize: 9, fontWeight: 800, color: '#F87171',
+                fontVariantNumeric: 'tabular-nums', lineHeight: 1,
+              }}>
+                {fmtMin(nowMin)}
+              </div>
+            )}
           </div>
 
           {/* Horizontal grid lines */}
@@ -1656,6 +1691,24 @@ function GridView({ activeDay, bands, scheduledIds, onAdd, onRemove }) {
               }} />
             ))}
           </div>
+
+          {/* Now indicator line */}
+          {nowPx !== null && (
+            <div style={{
+              position: 'absolute', left: TIME_W, right: 0,
+              top: nowPx, height: 2,
+              background: '#F87171',
+              boxShadow: '0 0 6px rgba(248,113,113,0.7)',
+              zIndex: 5, pointerEvents: 'none',
+            }}>
+              {/* Dot on the left edge */}
+              <div style={{
+                position: 'absolute', left: -5, top: -4,
+                width: 10, height: 10, borderRadius: 5,
+                background: '#F87171',
+              }} />
+            </div>
+          )}
 
           {/* Stage columns */}
           {stages.map(s => (
