@@ -6,13 +6,16 @@
 set -euo pipefail
 
 name="$1"
+# Optional second arg: stage/context hint (e.g. "New Orleans" or stage name)
+# Helps disambiguate band names that collide with famous song titles.
+context="${2:-New Orleans music}"
 
 # Channel name patterns to reject (news outlets, talk shows, TV stations)
 NEWS_PAT='news|nbc|cbs|abc|cnn|fox|msnbc|bbc|npr|pbs|reuters|associated press|ap news|guardian|washington post|new york times|today show|tonight show|late show|late night|daily show|colbert|fallon|kimmel|letterman|conan|60 minutes|dateline|nightline|morning joe|good morning|wdsu|wvue|wdaf|wral|wbtv|khou|ksat|ktvu|wsb|wfaa|kxan|tegna|nexstar|gray tv|sinclair|hearst'
 
-# Search with "music" appended to bias toward music content.
-# Print channel name (field 3) so we can filter it out before passing to rerank.
-results=$(yt-dlp "ytsearch8:${name} music" \
+# Put the name in quotes to match as a phrase, then append context.
+# Quoting prevents "Boyfriend" from matching Justin Bieber's song "Boyfriend".
+results=$(yt-dlp "ytsearch8:\"${name}\" ${context}" \
   --print "%(view_count)s	%(id)s	%(channel)s	%(title)s" \
   --no-playlist \
   --ignore-errors \

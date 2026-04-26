@@ -23,6 +23,7 @@ const DRY_RUN = process.argv.includes('--dry-run');
 const window = {};
 eval(fs.readFileSync(SCHEDULE, 'utf8'));
 const bands = window.BANDS_FULL;
+const STAGE_BY_ID = Object.fromEntries((window.STAGES || []).map(s => [s.id, s]));
 
 // Deduplicate by name (same artist may appear on multiple days)
 const seen = new Map(); // name -> first band entry
@@ -39,9 +40,11 @@ async function checkEmbeddable(vid) {
   } catch { return false; }
 }
 
-function searchCandidates(name) {
+function searchCandidates(name, stageName) {
+  // Pass stage name as context so "Boyfriend" doesn't match Justin Bieber's song, etc.
+  const context = stageName ? `${stageName} New Orleans music` : 'New Orleans music';
   return new Promise((resolve) => {
-    const child = spawn('bash', ['best_yt.sh', name], { cwd: __dirname });
+    const child = spawn('bash', ['best_yt.sh', name, context], { cwd: __dirname });
     let out = '';
     child.stdout.on('data', d => out += d);
     child.stderr.on('data', () => {});
@@ -58,8 +61,8 @@ function searchCandidates(name) {
   });
 }
 
-async function searchBest(name) {
-  const candidates = await searchCandidates(name);
+async function searchBest(name, stageName) {
+  const candidates = await searchCandidates(name, stageName);
   if (candidates.length === 0) return { name, vid: null, views: 0, title: '' };
   for (const c of candidates) {
     if (await checkEmbeddable(c.vid)) return c;
@@ -79,7 +82,7 @@ async function runQueue() {
       while (active < PARALLEL && queue.length > 0) {
         const band = queue.shift();
         active++;
-        searchBest(band.name).then(r => {
+        searchBest(band.name, STAGE_BY_ID?.[band.stage]?.name).then(r => {
           results.push(r);
           active--;
           done++;

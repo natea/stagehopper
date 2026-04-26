@@ -403,20 +403,13 @@ function BandCard({ band, top, onSwipe, scheduled, autoPlay, onToggleAutoPlay })
         {conflicts.length > 0 && (
           <div style={{
             marginTop: 6,
-            background: 'rgba(220, 80, 70, 0.14)',
-            border: '1px solid rgba(220, 80, 70, 0.4)',
+            background: 'rgba(220, 80, 70, 0.12)',
+            border: '1px solid rgba(220, 80, 70, 0.35)',
             color: '#FFB4A8',
-            borderRadius: 10, padding: '8px 10px',
-            fontSize: 12, lineHeight: 1.35,
+            borderRadius: 8, padding: '5px 8px',
+            fontSize: 11, lineHeight: 1.3,
           }}>
-            <div style={{ fontWeight: 700, marginBottom: 2 }}>
-              ⚠ Conflicts with {conflicts.length === 1 ? 'a band' : `${conflicts.length} bands`} on your schedule
-            </div>
-            {conflicts.slice(0, 2).map(c => (
-              <div key={c.id} style={{ opacity: 0.9 }}>
-                {c.name} — {fmtTimeShort(c.start)}–{fmtTimeShort(c.end)} @ {STAGE_BY_ID[c.stage].name}
-              </div>
-            ))}
+            ⚠ Conflicts: {conflicts.slice(0, 2).map(c => `${c.name} ${fmtTimeShort(c.start)}p`).join(', ')}
           </div>
         )}
       </div>
