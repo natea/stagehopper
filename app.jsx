@@ -390,7 +390,9 @@ function BandCard({ band, top, onSwipe, scheduled, autoPlay, onToggleAutoPlay })
 
         <p style={{
           margin: '4px 0 0', fontSize: 14, lineHeight: 1.45,
-          color: 'rgba(245,241,234,0.85)', textWrap: 'pretty',
+          color: 'rgba(245,241,234,0.85)',
+          display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
         }}>{band.blurb}</p>
 
         {/* Conflict warning */}
