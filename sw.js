@@ -1,5 +1,5 @@
 // Bump CACHE_VERSION whenever you ship updates so users get fresh files.
-const CACHE_VERSION = 'jazzfest-v21';
+const CACHE_VERSION = 'jazzfest-v22';
 const CORE = [
   './',
   './index.html',

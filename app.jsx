@@ -1565,6 +1565,7 @@ function App() {
   const [mapView, setMapView] = useState(null); // 'festival' | 'access' | null
   const [browseStage, setBrowseStage] = useState(null); // null = timeslot mode; stageId = stage-browse mode
   const [stagePickerOpen, setStagePickerOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   // Expose map opener for menu items
   window.__openMap = setMapView;
@@ -1710,6 +1711,7 @@ function App() {
         setView={setView}
         scheduledCount={scheduledBands.length}
         onMenuOpen={() => setMenuOpen(true)}
+        onSearchOpen={() => setSearchOpen(true)}
       />
 
       {view === 'discover' ? (
@@ -1746,6 +1748,16 @@ function App() {
           })}
         />
       )}
+
+      {/* Search overlay */}
+      <SearchOverlay
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        scheduledIds={scheduledIds}
+        rejectedIds={rejectedIds}
+        onAdd={(band) => setScheduledIds(prev => new Set([...prev, band.id]))}
+        onSkip={(band) => setRejectedIds(prev => new Set([...prev, band.id]))}
+      />
 
       {/* Hamburger menu */}
       <HamburgerMenu
@@ -1856,8 +1868,135 @@ function DayTabs({ days, activeDay, setActiveDay, compact }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// Search overlay
+// ─────────────────────────────────────────────────────────────
+function SearchOverlay({ open, onClose, scheduledIds, rejectedIds, onAdd, onSkip }) {
+  const [query, setQuery] = useState('');
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (open) { setQuery(''); setTimeout(() => inputRef.current?.focus(), 80); }
+  }, [open]);
+
+  if (!open) return null;
+
+  const q = query.trim().toLowerCase();
+  const results = q.length < 1 ? [] : window.BANDS_FULL.filter(b =>
+    b.name.toLowerCase().includes(q)
+  ).sort((a, b) => {
+    // Exact-start matches first, then alpha by name
+    const aStart = a.name.toLowerCase().startsWith(q);
+    const bStart = b.name.toLowerCase().startsWith(q);
+    if (aStart !== bStart) return aStart ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  }).slice(0, 40);
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 200,
+      background: '#0F0E0C',
+      display: 'flex', flexDirection: 'column',
+      paddingTop: 'max(14px, env(safe-area-inset-top, 14px))',
+    }}>
+      {/* Search bar row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px 12px' }}>
+        <div style={{
+          flex: 1, display: 'flex', alignItems: 'center', gap: 8,
+          background: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: '10px 14px',
+        }}>
+          <span style={{ fontSize: 16, opacity: 0.5 }}>🔍</span>
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search artists & bands…"
+            style={{
+              flex: 1, background: 'none', border: 0, outline: 'none',
+              color: '#F5F1EA', fontSize: 16, fontFamily: 'inherit',
+            }}
+          />
+          {query.length > 0 && (
+            <button onClick={() => setQuery('')} style={{
+              background: 'none', border: 0, color: 'rgba(245,241,234,0.4)',
+              fontSize: 18, cursor: 'pointer', padding: 0, lineHeight: 1,
+            }}>×</button>
+          )}
+        </div>
+        <button onClick={onClose} style={{
+          background: 'none', border: 0, color: 'rgba(245,241,234,0.6)',
+          fontSize: 15, fontWeight: 600, cursor: 'pointer', padding: '4px 0',
+          fontFamily: 'inherit',
+        }}>Cancel</button>
+      </div>
+
+      {/* Results */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {q.length === 0 ? (
+          <div style={{ padding: '40px 20px', textAlign: 'center', color: 'rgba(245,241,234,0.35)', fontSize: 14 }}>
+            Type to search all {window.BANDS_FULL.length} artists
+          </div>
+        ) : results.length === 0 ? (
+          <div style={{ padding: '40px 20px', textAlign: 'center', color: 'rgba(245,241,234,0.35)', fontSize: 14 }}>
+            No artists found for "{query}"
+          </div>
+        ) : results.map(band => {
+          const stage = STAGE_BY_ID[band.stage];
+          const day = DAY_BY_ID[band.day];
+          const isAdded = scheduledIds.has(band.id);
+          const isSkipped = rejectedIds.has(band.id);
+          return (
+            <div key={band.id} style={{
+              display: 'flex', alignItems: 'center',
+              padding: '12px 16px',
+              borderBottom: '1px solid rgba(255,255,255,0.06)',
+            }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: 15, fontWeight: 600, color: '#F5F1EA',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>{band.name}</div>
+                <div style={{ fontSize: 12, color: 'rgba(245,241,234,0.5)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>{day?.label}</span>
+                  <span>·</span>
+                  <span>{fmtTime(band.start)}</span>
+                  <span>·</span>
+                  <span style={{
+                    background: stage?.tone, color: '#fff',
+                    fontSize: 10, fontWeight: 700, letterSpacing: 0.4,
+                    padding: '2px 6px', borderRadius: 3, textTransform: 'uppercase',
+                  }}>{stage?.name}</span>
+                </div>
+                {band.blurb && (
+                  <div style={{ fontSize: 12, color: 'rgba(245,241,234,0.4)', marginTop: 4, lineHeight: 1.35,
+                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                  }}>{band.blurb}</div>
+                )}
+              </div>
+              <div style={{ marginLeft: 12, flexShrink: 0 }}>
+                {isAdded ? (
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#4ADE80' }}>✓ Added</span>
+                ) : (
+                  <button
+                    onClick={() => onAdd(band)}
+                    style={{
+                      background: '#F5F1EA', color: '#0F0E0C',
+                      border: 0, borderRadius: 8, padding: '6px 14px',
+                      fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >+ Add</button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // Header pulled inline so we can pass days dynamically
-function HeaderInner({ days, activeDay, setActiveDay, view, setView, scheduledCount, onMenuOpen }) {
+function HeaderInner({ days, activeDay, setActiveDay, view, setView, scheduledCount, onMenuOpen, onSearchOpen }) {
   const compact = days.length > 4;
   return (
     <div style={{
@@ -1866,7 +2005,7 @@ function HeaderInner({ days, activeDay, setActiveDay, view, setView, scheduledCo
       paddingBottom: 0,
       position: 'relative', zIndex: 5,
     }}>
-      {/* Row 1: title + hamburger */}
+      {/* Row 1: title + search + hamburger */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         marginBottom: 8,
@@ -1876,7 +2015,16 @@ function HeaderInner({ days, activeDay, setActiveDay, view, setView, scheduledCo
           fontFamily: 'Georgia, "Times New Roman", serif',
           fontSize: 20, fontWeight: 700, letterSpacing: -0.5,
         }}>StageHopper</h1>
-        <HamburgerBtn onClick={onMenuOpen} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={onSearchOpen} style={{
+            border: 0, background: 'rgba(255,255,255,0.08)',
+            color: '#F5F1EA', borderRadius: 8,
+            width: 36, height: 36, cursor: 'pointer', flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 16,
+          }}>🔍</button>
+          <HamburgerBtn onClick={onMenuOpen} />
+        </div>
       </div>
       {/* Row 2: view toggle */}
       <div style={{ marginBottom: 10 }}>
