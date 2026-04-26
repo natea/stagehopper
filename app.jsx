@@ -4,7 +4,7 @@
 
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
-const APP_VERSION = 'v51';
+const APP_VERSION = 'v52';
 
 // ─────────────────────────────────────────────────────────────
 // Helpers
@@ -973,11 +973,13 @@ function MineBandSheet({ band, conflictingBands, onClose, onRemove, onRemoveConf
   // ── Drag-to-reorder ───────────────────────────────────────
   const dragState = useRef(null);
   const rowRefs = useRef({});
+  const [draggingId, setDraggingId] = useState(null);
 
   const onDragStart = (e, id) => {
     e.stopPropagation();
     dragState.current = { id, startY: e.clientY };
     e.currentTarget.setPointerCapture(e.pointerId);
+    setDraggingId(id);
   };
 
   const onDragMove = (e) => {
@@ -999,7 +1001,7 @@ function MineBandSheet({ band, conflictingBands, onClose, onRemove, onRemoveConf
     });
   };
 
-  const onDragEnd = () => { dragState.current = null; };
+  const onDragEnd = () => { dragState.current = null; setDraggingId(null); };
 
   const handleClose = () => {
     if (onTopPickChange && order[0]) onTopPickChange(order[0]);
@@ -1055,29 +1057,37 @@ function MineBandSheet({ band, conflictingBands, onClose, onRemove, onRemoveConf
                 const isPreview = b.id === previewId;
                 const isOriginalBand = b.id === band.id;
                 return (
-                  <div key={b.id} style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '10px 10px 10px 6px',
-                    borderRadius: 12,
-                    background: isTop
-                      ? 'rgba(74,222,128,0.12)'
-                      : isPreview
-                        ? 'rgba(255,255,255,0.06)'
-                        : 'rgba(255,255,255,0.03)',
-                    border: isTop ? '1px solid rgba(74,222,128,0.3)' : '1px solid transparent',
-                    cursor: 'pointer',
-                    transition: 'background 0.15s',
-                    minHeight: 52,
-                    boxSizing: 'border-box',
-                  }}>
-                    {/* Drag handle */}
-                    <div
-                      onPointerDown={e => onDragStart(e, b.id)}
-                      onPointerMove={onDragMove}
-                      onPointerUp={onDragEnd}
-                      onPointerCancel={onDragEnd}
-                      style={{ color: '#F5F1EA', cursor: 'grab', padding: '4px 2px', touchAction: 'none' }}
-                    >
+                  <div key={b.id}
+                    onPointerDown={e => onDragStart(e, b.id)}
+                    onPointerMove={onDragMove}
+                    onPointerUp={onDragEnd}
+                    onPointerCancel={onDragEnd}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '10px 10px 10px 6px',
+                      borderRadius: 12,
+                      background: draggingId === b.id
+                        ? 'rgba(255,255,255,0.14)'
+                        : isTop
+                          ? 'rgba(74,222,128,0.12)'
+                          : isPreview
+                            ? 'rgba(255,255,255,0.06)'
+                            : 'rgba(255,255,255,0.03)',
+                      border: draggingId === b.id
+                        ? '1px solid rgba(255,255,255,0.25)'
+                        : isTop ? '1px solid rgba(74,222,128,0.3)' : '1px solid transparent',
+                      cursor: draggingId === b.id ? 'grabbing' : 'grab',
+                      touchAction: 'none',
+                      transition: draggingId === b.id ? 'none' : 'background 0.15s, transform 0.15s, box-shadow 0.15s',
+                      transform: draggingId === b.id ? 'scale(1.03)' : 'scale(1)',
+                      boxShadow: draggingId === b.id ? '0 8px 24px rgba(0,0,0,0.5)' : 'none',
+                      zIndex: draggingId === b.id ? 2 : 1,
+                      position: 'relative',
+                      minHeight: 52,
+                      boxSizing: 'border-box',
+                    }}>
+                    {/* Drag handle — visual affordance only */}
+                    <div style={{ color: '#F5F1EA', padding: '4px 2px', opacity: draggingId === b.id ? 0.8 : 0.4 }}>
                       <DragHandle />
                     </div>
 
@@ -1085,7 +1095,7 @@ function MineBandSheet({ band, conflictingBands, onClose, onRemove, onRemoveConf
                     <div style={{ width: 10, height: 10, borderRadius: 5, background: s.tone, flexShrink: 0 }} />
 
                     {/* Band info — tap to preview */}
-                    <div style={{ flex: 1, minWidth: 0 }} onClick={() => setPreviewId(b.id)}>
+                    <div style={{ flex: 1, minWidth: 0 }} onClick={() => { if (!draggingId) setPreviewId(b.id); }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         {isTop && <span style={{ fontSize: 9, fontWeight: 800, color: '#4ADE80', letterSpacing: 0.8, textTransform: 'uppercase' }}>Top pick</span>}
                         <span style={{ fontSize: 14, fontWeight: 700, color: '#F5F1EA', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</span>
