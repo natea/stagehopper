@@ -1360,19 +1360,23 @@ function BandPreviewSheet({ band, onClose, scheduledIds, onAdd, onRemove }) {
         display: 'flex', flexDirection: 'column',
         boxShadow: '0 -8px 40px rgba(0,0,0,0.6)', overflow: 'hidden',
       }}>
-        {/* Handle + close */}
-        <div style={{ position: 'relative', padding: '14px 20px 0', flexShrink: 0 }}>
+        {/* Handle bar */}
+        <div style={{ padding: '14px 20px 0', flexShrink: 0 }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(245,241,234,0.2)', margin: '0 auto' }} />
-          <button onClick={onClose} style={{
-            position: 'absolute', top: 8, right: 16,
-            width: 30, height: 30, borderRadius: 15,
-            border: 0, background: 'rgba(245,241,234,0.12)', color: 'rgba(245,241,234,0.7)',
-            fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>×</button>
         </div>
-        {/* Video */}
+        {/* Video with close button overlaid */}
         <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', flexShrink: 0 }}>
           <VideoPreview band={band} stage={stage} autoPlay={true} />
+          <button
+            onPointerDown={e => e.stopPropagation()}
+            onClick={onClose}
+            style={{
+              position: 'absolute', top: 10, right: 10, zIndex: 10,
+              width: 32, height: 32, borderRadius: 16,
+              border: 0, background: 'rgba(0,0,0,0.6)', color: '#fff',
+              fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backdropFilter: 'blur(4px)',
+            }}>×</button>
         </div>
         {/* Info */}
         <div style={{ overflowY: 'auto', padding: '14px 18px 32px', display: 'flex', flexDirection: 'column', gap: 8 }}>
