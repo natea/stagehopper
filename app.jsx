@@ -134,7 +134,7 @@ const saveSet = (key, set) =>
 //   - Verified bands (yt is real): embed the YouTube player
 //   - Unverified bands: tap-to-search tile (always works)
 // ─────────────────────────────────────────────────────────────
-function YouTubeEmbed({ id, band, stage, onFallback }) {
+function YouTubeEmbed({ id, band, stage, autoPlay, onFallback }) {
   const [failed, setFailed] = useState(false);
   // Detect embed failures: poll the iframe for "embed disabled" error which
   // shows in the iframe's body. Easiest signal: listen to YT IFrame API
@@ -146,7 +146,10 @@ function YouTubeEmbed({ id, band, stage, onFallback }) {
   // can't validate the origin. Hosting over http(s) (PWA) makes them work.
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const originParam = origin && origin !== 'null' && !origin.startsWith('file') ? `&origin=${encodeURIComponent(origin)}` : '';
-  const src = `https://www.youtube.com/embed/${id}?autoplay=0&controls=1&modestbranding=1&playsinline=1&rel=0&enablejsapi=1${originParam}`;
+  // autoplay=1&mute=1: browsers allow muted autoplay without a user gesture (TikTok-style).
+  // The user can unmute inside the player. When autoPlay is off, video waits for a tap.
+  const autoParams = autoPlay ? '&autoplay=1&mute=1' : '&autoplay=0';
+  const src = `https://www.youtube.com/embed/${id}?controls=1&modestbranding=1&playsinline=1&rel=0&enablejsapi=1${autoParams}${originParam}`;
   return (
     <>
       <iframe
@@ -230,9 +233,9 @@ function YouTubeSearchTile({ band, stage }) {
   );
 }
 
-function VideoPreview({ band, stage }) {
+function VideoPreview({ band, stage, autoPlay }) {
   if (band.verified && band.yt) {
-    return <YouTubeEmbed id={band.yt} band={band} stage={stage} />;
+    return <YouTubeEmbed id={band.yt} band={band} stage={stage} autoPlay={autoPlay} />;
   }
   return <YouTubeSearchTile band={band} stage={stage} />;
 }
@@ -240,7 +243,7 @@ function VideoPreview({ band, stage }) {
 // ─────────────────────────────────────────────────────────────
 // Card
 // ─────────────────────────────────────────────────────────────
-function BandCard({ band, top, onSwipe, scheduled, soundOn, onToggleSound }) {
+function BandCard({ band, top, onSwipe, scheduled, autoPlay, onToggleAutoPlay }) {
   const [drag, setDrag] = useState({ x: 0, y: 0, dragging: false });
   const startRef = useRef(null);
   const cardRef = useRef(null);
@@ -309,14 +312,29 @@ function BandCard({ band, top, onSwipe, scheduled, soundOn, onToggleSound }) {
           stays interactive. */}
       <div style={{ position: 'relative', width: '100%', height: '52%', background: '#000' }}>
         {top ? (
-          <VideoPreview band={band} stage={stage} />
+          <VideoPreview band={band} stage={stage} autoPlay={autoPlay} />
         ) : (
           <div style={{
             position: 'absolute', inset: 0,
             background: `linear-gradient(135deg, ${stage.tone}, #1a1a1a)`,
           }} />
         )}
-        {/* (sound toggle removed — no embed playing) */}
+        {/* Autoplay toggle — top-left of video area */}
+        {top && (
+          <button
+            onPointerDown={e => e.stopPropagation()}
+            onClick={e => { e.stopPropagation(); onToggleAutoPlay(); }}
+            title={autoPlay ? 'Turn off autoplay' : 'Turn on autoplay'}
+            style={{
+              position: 'absolute', top: 10, left: 10, zIndex: 10,
+              background: 'rgba(0,0,0,0.55)', border: 0,
+              color: autoPlay ? '#fff' : 'rgba(255,255,255,0.45)',
+              fontSize: 16, width: 32, height: 32, borderRadius: 16,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', backdropFilter: 'blur(8px)',
+            }}
+          >{autoPlay ? '▶' : '⏸'}</button>
+        )}
         {/* fade to dark for text legibility */}
         <div style={{
           position: 'absolute', left: 0, right: 0, bottom: 0, height: 60,
@@ -1422,7 +1440,7 @@ function SlotBanner({ ctx, onOpenStagePicker, onExitStage }) {
   );
 }
 
-function DiscoverView({ deck, slotContext, allChosen, onSwipe, onUndo, undoStack, scheduled, soundOn, setSoundOn, browseStage, onBrowseStage, onOpenStagePicker, onResetDay }) {
+function DiscoverView({ deck, slotContext, allChosen, onSwipe, onUndo, undoStack, scheduled, autoPlay, setAutoPlay, browseStage, onBrowseStage, onOpenStagePicker, onResetDay }) {
   if (deck.length === 0) {
     if (allChosen) {
       // Every timeslot has a chosen band — genuinely done
@@ -1475,8 +1493,8 @@ function DiscoverView({ deck, slotContext, allChosen, onSwipe, onUndo, undoStack
             top={false}
             onSwipe={() => {}}
             scheduled={scheduled}
-            soundOn={false}
-            onToggleSound={() => {}}
+            autoPlay={false}
+            onToggleAutoPlay={() => {}}
           />
         )}
         <BandCard
@@ -1485,8 +1503,8 @@ function DiscoverView({ deck, slotContext, allChosen, onSwipe, onUndo, undoStack
           top={true}
           onSwipe={(dir) => onSwipe(top, dir)}
           scheduled={scheduled}
-          soundOn={soundOn}
-          onToggleSound={() => setSoundOn(!soundOn)}
+          autoPlay={autoPlay}
+          onToggleAutoPlay={() => setAutoPlay(!autoPlay)}
         />
       </div>
       <ActionBar
@@ -1504,7 +1522,7 @@ function DiscoverView({ deck, slotContext, allChosen, onSwipe, onUndo, undoStack
 // ─────────────────────────────────────────────────────────────
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "scheduleMode": "full",
-  "soundOn": false
+  "autoPlay": true
 }/*EDITMODE-END*/;
 
 function App() {
@@ -1526,7 +1544,7 @@ function App() {
   const [activeDay, setActiveDay] = useState(() => localStorage.getItem(LS_DAY) || 'd3');
   const [userTopPicks, setUserTopPicks] = useState(() => loadSet(LS_TOPPICKS));
   const [view, setView] = useState('discover');
-  const [soundOn, setSoundOn] = useState(t.soundOn);
+  const [autoPlay, setAutoPlay] = useState(t.autoPlay ?? true);
   const [undoStack, setUndoStack] = useState([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showIntro, setShowIntro] = useState(() => !localStorage.getItem(LS_INTRO));
@@ -1689,8 +1707,8 @@ function App() {
           onUndo={handleUndo}
           undoStack={undoStack}
           scheduled={scheduledBands}
-          soundOn={soundOn}
-          setSoundOn={(v) => { setSoundOn(v); setTweak('soundOn', v); }}
+          autoPlay={autoPlay}
+          setAutoPlay={(v) => { setAutoPlay(v); setTweak('autoPlay', v); }}
           browseStage={browseStage}
           onBrowseStage={setBrowseStage}
           onOpenStagePicker={() => setStagePickerOpen(true)}
