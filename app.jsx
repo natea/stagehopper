@@ -4,7 +4,11 @@
 
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
-const APP_VERSION = 'v52';
+const APP_VERSION = 'v53';
+
+const ph = (event, props) => {
+  try { window.posthog?.capture(event, props); } catch {}
+};
 
 // ─────────────────────────────────────────────────────────────
 // Helpers
@@ -2084,8 +2088,10 @@ function App() {
   const handleSwipe = useCallback((band, dir) => {
     if (dir === 'left') {
       setRejectedIds(prev => new Set([...prev, band.id]));
+      ph('band_skipped', { band_id: band.id, band_name: band.name, stage: band.stage, day: band.day });
     } else {
       setScheduledIds(prev => new Set([...prev, band.id]));
+      ph('band_added', { band_id: band.id, band_name: band.name, stage: band.stage, day: band.day, source: 'swipe' });
     }
     setUndoStack(prev => [...prev, { band, dir }]);
   }, []);
@@ -2099,12 +2105,14 @@ function App() {
       } else {
         setScheduledIds(s => { const n = new Set(s); n.delete(last.band.id); return n; });
       }
+      ph('swipe_undone', { band_name: last.band.name, dir: last.dir });
       return prev.slice(0, -1);
     });
   };
 
   const handleRemove = (band) => {
     setScheduledIds(s => { const n = new Set(s); n.delete(band.id); return n; });
+    ph('band_removed', { band_id: band.id, band_name: band.name });
   };
 
   // ── Upcoming show banner ───────────────────────────────────────
@@ -2131,12 +2139,12 @@ function App() {
       <HeaderInner
         days={headerDays}
         activeDay={activeDay}
-        setActiveDay={setActiveDay}
+        setActiveDay={(d) => { setActiveDay(d); ph('day_changed', { day: d }); }}
         view={view}
-        setView={setView}
+        setView={(v) => { setView(v); ph('tab_switched', { tab: v }); }}
         scheduledCount={scheduledBands.filter(b => b.day === activeDay).length}
         onMenuOpen={() => setMenuOpen(true)}
-        onSearchOpen={() => setSearchOpen(true)}
+        onSearchOpen={() => { setSearchOpen(true); ph('search_opened'); }}
       />
 
       {/* Upcoming show banners */}
@@ -2216,9 +2224,9 @@ function App() {
         onClose={() => setSearchOpen(false)}
         scheduledIds={scheduledIds}
         rejectedIds={rejectedIds}
-        onAdd={(band) => setScheduledIds(prev => new Set([...prev, band.id]))}
-        onRemove={(band) => setScheduledIds(prev => { const n = new Set(prev); n.delete(band.id); return n; })}
-        onPreview={(band) => setSearchPreviewBand(band)}
+        onAdd={(band) => { setScheduledIds(prev => new Set([...prev, band.id])); ph('band_added', { band_id: band.id, band_name: band.name, source: 'search' }); }}
+        onRemove={(band) => { setScheduledIds(prev => { const n = new Set(prev); n.delete(band.id); return n; }); ph('band_removed', { band_id: band.id, band_name: band.name, source: 'search' }); }}
+        onPreview={(band) => { setSearchPreviewBand(band); ph('band_previewed', { band_id: band.id, band_name: band.name, source: 'search' }); }}
       />
 
       {/* Band preview from search — rendered at App level to escape stacking context */}
@@ -2226,8 +2234,8 @@ function App() {
         band={searchPreviewBand}
         onClose={() => setSearchPreviewBand(null)}
         scheduledIds={scheduledIds}
-        onAdd={(b) => { setScheduledIds(prev => new Set([...prev, b.id])); setSearchPreviewBand(null); }}
-        onRemove={(b) => { setScheduledIds(prev => { const n = new Set(prev); n.delete(b.id); return n; }); setSearchPreviewBand(null); }}
+        onAdd={(b) => { setScheduledIds(prev => new Set([...prev, b.id])); setSearchPreviewBand(null); ph('band_added', { band_id: b.id, band_name: b.name, source: 'search_preview' }); }}
+        onRemove={(b) => { setScheduledIds(prev => { const n = new Set(prev); n.delete(b.id); return n; }); setSearchPreviewBand(null); ph('band_removed', { band_id: b.id, band_name: b.name, source: 'search_preview' }); }}
       />
 
       {/* Hamburger menu */}
@@ -2354,6 +2362,18 @@ function SearchOverlay({ open, onClose, scheduledIds, rejectedIds, onAdd, onRemo
     if (open) { setQuery(''); setTimeout(() => inputRef.current?.focus(), 80); }
   }, [open]);
 
+  // Track searches with a short debounce so we capture intent, not every keystroke
+  const searchTimer = useRef(null);
+  const onQueryChange = (val) => {
+    setQuery(val);
+    clearTimeout(searchTimer.current);
+    if (val.trim().length >= 2) {
+      searchTimer.current = setTimeout(() => {
+        ph('search_query', { query: val.trim() });
+      }, 800);
+    }
+  };
+
   if (!open) return null;
 
   const q = query.trim().toLowerCase();
@@ -2384,7 +2404,7 @@ function SearchOverlay({ open, onClose, scheduledIds, rejectedIds, onAdd, onRemo
           <input
             ref={inputRef}
             value={query}
-            onChange={e => setQuery(e.target.value)}
+            onChange={e => onQueryChange(e.target.value)}
             placeholder="Search artists & bands…"
             style={{
               flex: 1, background: 'none', border: 0, outline: 'none',
