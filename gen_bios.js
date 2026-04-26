@@ -159,7 +159,7 @@ for (const band of bands) {
   const bio = bios.get(band.name);
   if (!bio?.blurb) continue;
 
-  const esc = s => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const esc = s => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/[\r\n]+/g, ' ').trim();
 
   const pat = new RegExp(
     `(\\{[^{}]*?id:\\s*'${band.id}'[^{}]*?)(\\})`,
