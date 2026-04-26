@@ -734,10 +734,10 @@ function AboutSheet({ open, onClose }) {
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: 'rgba(245,241,234,0.35)', textTransform: 'uppercase', marginBottom: 10 }}>Built by</div>
               <div style={{ fontSize: 15, fontWeight: 600, color: '#F5F1EA', marginBottom: 4 }}>Nate Aune</div>
               <a
-                href="mailto:nate@backlit.life"
+                href="mailto:nate@stagehopper.app"
                 onClick={e => e.stopPropagation()}
                 style={{ color: '#FBBF24', fontSize: 13, textDecoration: 'none' }}
-              >nate@backlit.life</a>
+              >nate@stagehopper.app</a>
             </div>
 
             <div style={{
