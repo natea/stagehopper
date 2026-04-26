@@ -92,28 +92,18 @@ function getTargetSlot(dayId, allDayBands, scheduledIds) {
   return next ? { slot: next.start, label: 'NEXT' } : { slot: null, label: null };
 }
 
-// Schedule local Notification API alerts (15-min warning) for today's shows.
-function scheduleLocalNotifications(scheduledBands) {
-  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+// Returns bands starting within the next 15 minutes (for today only).
+function getUpcomingBands(scheduledBands) {
   const today = todayDate();
-  for (const band of scheduledBands) {
+  const now = Date.now();
+  return scheduledBands.filter(band => {
     const day = DAY_BY_ID[band.day];
-    if (!day || day.date !== today) continue;
+    if (!day || day.date !== today) return false;
     const [h, m] = band.start.split(':').map(Number);
     const showMs = new Date(day.date + 'T00:00:00').getTime() + (h * 60 + m) * 60000;
-    const alertMs = showMs - 15 * 60000;
-    const delay = alertMs - Date.now();
-    if (delay > 0 && delay < 6 * 3600000) { // only within 6 hours
-      setTimeout(() => {
-        new Notification(`Starting soon: ${band.name}`, {
-          body: `${fmtTime(band.start)} · ${STAGE_BY_ID[band.stage]?.name}`,
-          icon: 'icon-192.png',
-          tag: `jf26-${band.id}`,
-          silent: false,
-        });
-      }, delay);
-    }
-  }
+    const minsUntil = (showMs - now) / 60000;
+    return minsUntil > 0 && minsUntil <= 15;
+  });
 }
 
 // LocalStorage keys
@@ -134,66 +124,95 @@ const saveSet = (key, set) =>
 //   - Verified bands (yt is real): embed the YouTube player
 //   - Unverified bands: tap-to-search tile (always works)
 // ─────────────────────────────────────────────────────────────
-function YouTubeEmbed({ id, band, stage, autoPlay, onFallback }) {
+const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent);
+
+function YouTubeEmbed({ id, band, stage, autoPlay }) {
   const [failed, setFailed] = useState(false);
+  // iOS Safari cannot autoplay YouTube iframes via postMessage or URL params —
+  // the play call must originate from a direct user gesture on the page.
+  // Fix: show a thumbnail facade on iOS. When tapped (direct gesture), load
+  // the iframe with autoplay=1, which iOS then honors.
+  // On non-iOS (Chrome/Brave), keep URL-based autoplay + postMessage.
+  const [iosLoaded, setIosLoaded] = useState(!IS_IOS);
   const iframeRef = useRef(null);
 
-  // YT IFrame API fires postMessage with error codes 100, 101, 150 when a
-  // video is unavailable or embedding is disabled.
-  // Also use postMessage to trigger play on ready — iOS Safari ignores autoplay=1
-  // in the URL when the triggering gesture (swipe) wasn't directly on the iframe.
-  useEffect(() => {
-    const fail = () => setFailed(true);
-    const play = () => iframeRef.current?.contentWindow?.postMessage(
-      JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*'
-    );
-    const pause = () => iframeRef.current?.contentWindow?.postMessage(
-      JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }), '*'
-    );
+  // New card: reset facade on iOS
+  useEffect(() => { if (IS_IOS) setIosLoaded(false); }, [id]);
 
+  const postCmd = (func, args = []) => iframeRef.current?.contentWindow?.postMessage(
+    JSON.stringify({ event: 'command', func, args }), '*'
+  );
+
+  // Non-iOS: postMessage play/pause on ready and when autoPlay toggles
+  useEffect(() => {
+    if (IS_IOS || !iosLoaded) return;
     const handle = (e) => {
       if (!e.origin.includes('youtube.com')) return;
       try {
         const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-        if (data?.event === 'infoDelivery' && data?.info?.error) fail();
-        if (data?.event === 'onError') fail();
-        if (data?.info && [100, 101, 150].includes(data.info.error)) fail();
-        // When the player is ready, trigger play/pause based on autoPlay prop
-        if (data?.event === 'onReady') { if (autoPlay) play(); }
+        if (data?.event === 'infoDelivery' && data?.info?.error) setFailed(true);
+        if (data?.event === 'onError') setFailed(true);
+        if (data?.info && [100, 101, 150].includes(data.info.error)) setFailed(true);
+        if (data?.event === 'onReady') { if (autoPlay) postCmd('playVideo'); else postCmd('pauseVideo'); }
       } catch {}
     };
     window.addEventListener('message', handle);
-
-    // If autoPlay was just toggled on for an already-loaded player, play now.
-    if (autoPlay) play(); else pause();
-
+    if (autoPlay) postCmd('playVideo'); else postCmd('pauseVideo');
     return () => window.removeEventListener('message', handle);
-  }, [id, autoPlay]);
+  }, [id, autoPlay, iosLoaded]);
 
   if (failed) return <YouTubeSearchTile band={band} stage={stage} />;
 
-  // Note: YouTube embeds throw Error 153 when loaded from file:// — the player
-  // can't validate the origin. Hosting over http(s) (PWA) makes them work.
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const originParam = origin && origin !== 'null' && !origin.startsWith('file') ? `&origin=${encodeURIComponent(origin)}` : '';
-  // autoplay=1: play with sound after user has interacted with the page (swiping counts).
-  // When autoPlay is off, video waits for a tap.
-  const autoParams = autoPlay ? '&autoplay=1' : '&autoplay=0';
-  const src = `https://www.youtube.com/embed/${id}?controls=1&modestbranding=1&playsinline=1&rel=0&enablejsapi=1${autoParams}${originParam}`;
+  const src = `https://www.youtube.com/embed/${id}?controls=1&modestbranding=1&playsinline=1&rel=0&enablejsapi=1&autoplay=1${originParam}`;
+
+  // iOS facade: thumbnail + play button until user taps
+  if (IS_IOS && !iosLoaded) {
+    const thumb = `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+    return (
+      <>
+        <img src={thumb} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+        <div
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); setIosLoaded(true); }}
+          style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(0,0,0,0.25)', cursor: 'pointer',
+          }}
+        >
+          <div style={{
+            width: 64, height: 64, borderRadius: 32,
+            background: 'rgba(0,0,0,0.72)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 26, paddingLeft: 4,
+          }}>▶</div>
+        </div>
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); setFailed(true); }}
+          style={{
+            position: 'absolute', bottom: 8, left: 8, zIndex: 5,
+            background: 'rgba(0,0,0,0.55)', color: '#fff',
+            border: 0, fontSize: 10, fontWeight: 600, letterSpacing: 0.4,
+            padding: '4px 8px', borderRadius: 4, cursor: 'pointer',
+            backdropFilter: 'blur(8px)',
+          }}
+        >Won't play? Search instead ↗</button>
+      </>
+    );
+  }
+
   return (
     <>
       <iframe
         ref={iframeRef}
         src={src}
-        style={{
-          position: 'absolute', inset: 0, width: '100%', height: '100%',
-          border: 0,
-        }}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0 }}
         allow="autoplay; encrypted-media; picture-in-picture"
         allowFullScreen
       />
-
-      {/* Escape hatch for embeds that fail silently (no postMessage error) */}
       <button
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => { e.stopPropagation(); setFailed(true); }}
@@ -365,8 +384,10 @@ function BandCard({ band, top, onSwipe, scheduled, autoPlay, onToggleAutoPlay })
         }} />
       </div>
 
-      {/* Info — bottom half */}
-      <div style={{
+      {/* Info — bottom half. Non-top cards just show a plain dark area to
+          prevent the below card's badges from bleeding through on iOS Safari. */}
+      {!top && <div style={{ flex: 1, background: '#0F0E0C' }} />}
+      {top && <div style={{
         padding: '14px 18px 16px', color: '#F5F1EA',
         display: 'flex', flexDirection: 'column', gap: 8,
         height: '48%', boxSizing: 'border-box',
@@ -425,7 +446,7 @@ function BandCard({ band, top, onSwipe, scheduled, autoPlay, onToggleAutoPlay })
             ⚠ Conflicts: {conflicts.slice(0, 2).map(c => `${c.name} ${fmtTimeShort(c.start)}p`).join(', ')}
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Swipe overlays */}
       {top && (
@@ -1900,6 +1921,7 @@ function App() {
   const [browseStage, setBrowseStage] = useState(null); // null = timeslot mode; stageId = stage-browse mode
   const [stagePickerOpen, setStagePickerOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchPreviewBand, setSearchPreviewBand] = useState(null);
 
   // Expose map opener for menu items
   window.__openMap = setMapView;
@@ -1921,7 +1943,7 @@ function App() {
 
   // ── Deck computation ─────────────────────────────────────────
   const { deck, slotContext, allChosen } = useMemo(() => {
-    const allDay = bands.filter(b => b.day === activeDay);
+    const allDay = bands.filter(b => b.day === activeDay && b.stage !== 'children');
 
     // ── Stage-browse mode ──────────────────────────────────────
     if (browseStage) {
@@ -2013,19 +2035,16 @@ function App() {
     setScheduledIds(s => { const n = new Set(s); n.delete(band.id); return n; });
   };
 
-  // ── Notifications ─────────────────────────────────────────────
-  // Request permission when user opens Mine tab, then (re)schedule alerts.
+  // ── Upcoming show banner ───────────────────────────────────────
+  const [upcomingBands, setUpcomingBands] = useState([]);
+  const [dismissedAlerts, setDismissedAlerts] = useState(() => new Set());
+
   useEffect(() => {
-    if (view !== 'schedule') return;
-    if (!('Notification' in window)) return;
-    if (Notification.permission === 'default') {
-      Notification.requestPermission().then(p => {
-        if (p === 'granted') scheduleLocalNotifications(scheduledBands);
-      });
-    } else if (Notification.permission === 'granted') {
-      scheduleLocalNotifications(scheduledBands);
-    }
-  }, [view, scheduledBands]);
+    const check = () => setUpcomingBands(getUpcomingBands(scheduledBands));
+    check();
+    const id = setInterval(check, 60000);
+    return () => clearInterval(id);
+  }, [scheduledBands]);
 
   // Provide days/active-day to Header — hack: temporarily override window.DAYS for Header
   const headerDays = days;
@@ -2047,6 +2066,34 @@ function App() {
         onMenuOpen={() => setMenuOpen(true)}
         onSearchOpen={() => setSearchOpen(true)}
       />
+
+      {/* Upcoming show banners */}
+      {upcomingBands.filter(b => !dismissedAlerts.has(b.id)).map(band => {
+        const stage = STAGE_BY_ID[band.stage];
+        const [h, m] = band.start.split(':').map(Number);
+        const showMs = new Date(todayDate() + 'T00:00:00').getTime() + (h * 60 + m) * 60000;
+        const minsUntil = Math.ceil((showMs - Date.now()) / 60000);
+        return (
+          <div key={band.id} style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 14px',
+            background: '#C9A84C',
+            color: '#0F0E0C',
+          }}>
+            <span style={{ fontSize: 18 }}>⏰</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {band.name} in {minsUntil} min
+              </div>
+              <div style={{ fontSize: 12, opacity: 0.75 }}>{fmtTime(band.start)} · {stage?.name}</div>
+            </div>
+            <button onClick={() => setDismissedAlerts(prev => new Set([...prev, band.id]))} style={{
+              background: 'none', border: 0, fontSize: 20, cursor: 'pointer',
+              color: '#0F0E0C', opacity: 0.6, padding: '0 2px', lineHeight: 1,
+            }}>×</button>
+          </div>
+        );
+      })}
 
       {view === 'grid' ? (
         <GridView
@@ -2099,6 +2146,16 @@ function App() {
         rejectedIds={rejectedIds}
         onAdd={(band) => setScheduledIds(prev => new Set([...prev, band.id]))}
         onRemove={(band) => setScheduledIds(prev => { const n = new Set(prev); n.delete(band.id); return n; })}
+        onPreview={(band) => setSearchPreviewBand(band)}
+      />
+
+      {/* Band preview from search — rendered at App level to escape stacking context */}
+      <BandPreviewSheet
+        band={searchPreviewBand}
+        onClose={() => setSearchPreviewBand(null)}
+        scheduledIds={scheduledIds}
+        onAdd={(b) => { setScheduledIds(prev => new Set([...prev, b.id])); setSearchPreviewBand(null); }}
+        onRemove={(b) => { setScheduledIds(prev => { const n = new Set(prev); n.delete(b.id); return n; }); setSearchPreviewBand(null); }}
       />
 
       {/* Hamburger menu */}
@@ -2217,13 +2274,12 @@ function DayTabs({ days, activeDay, setActiveDay, compact }) {
 // ─────────────────────────────────────────────────────────────
 // Search overlay
 // ─────────────────────────────────────────────────────────────
-function SearchOverlay({ open, onClose, scheduledIds, rejectedIds, onAdd, onRemove }) {
+function SearchOverlay({ open, onClose, scheduledIds, rejectedIds, onAdd, onRemove, onPreview }) {
   const [query, setQuery] = useState('');
-  const [previewBand, setPreviewBand] = useState(null);
   const inputRef = useRef(null);
 
   useEffect(() => {
-    if (open) { setQuery(''); setPreviewBand(null); setTimeout(() => inputRef.current?.focus(), 80); }
+    if (open) { setQuery(''); setTimeout(() => inputRef.current?.focus(), 80); }
   }, [open]);
 
   if (!open) return null;
@@ -2299,7 +2355,7 @@ function SearchOverlay({ open, onClose, scheduledIds, rejectedIds, onAdd, onRemo
               borderBottom: '1px solid rgba(255,255,255,0.06)',
               cursor: 'pointer',
             }}
-              onClick={() => setPreviewBand(band)}
+              onClick={() => onPreview(band)}
             >
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
@@ -2349,14 +2405,6 @@ function SearchOverlay({ open, onClose, scheduledIds, rejectedIds, onAdd, onRemo
         })}
       </div>
 
-      {/* Band preview sheet — tap a row to open */}
-      <BandPreviewSheet
-        band={previewBand}
-        onClose={() => setPreviewBand(null)}
-        scheduledIds={scheduledIds}
-        onAdd={(b) => { onAdd(b); setPreviewBand(null); }}
-        onRemove={(b) => { onRemove(b); setPreviewBand(null); }}
-      />
     </div>
   );
 }
