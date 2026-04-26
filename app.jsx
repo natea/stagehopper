@@ -2098,7 +2098,7 @@ function App() {
         scheduledIds={scheduledIds}
         rejectedIds={rejectedIds}
         onAdd={(band) => setScheduledIds(prev => new Set([...prev, band.id]))}
-        onSkip={(band) => setRejectedIds(prev => new Set([...prev, band.id]))}
+        onRemove={(band) => setScheduledIds(prev => { const n = new Set(prev); n.delete(band.id); return n; })}
       />
 
       {/* Hamburger menu */}
@@ -2217,12 +2217,13 @@ function DayTabs({ days, activeDay, setActiveDay, compact }) {
 // ─────────────────────────────────────────────────────────────
 // Search overlay
 // ─────────────────────────────────────────────────────────────
-function SearchOverlay({ open, onClose, scheduledIds, rejectedIds, onAdd, onSkip }) {
+function SearchOverlay({ open, onClose, scheduledIds, rejectedIds, onAdd, onRemove }) {
   const [query, setQuery] = useState('');
+  const [previewBand, setPreviewBand] = useState(null);
   const inputRef = useRef(null);
 
   useEffect(() => {
-    if (open) { setQuery(''); setTimeout(() => inputRef.current?.focus(), 80); }
+    if (open) { setQuery(''); setPreviewBand(null); setTimeout(() => inputRef.current?.focus(), 80); }
   }, [open]);
 
   if (!open) return null;
@@ -2296,7 +2297,10 @@ function SearchOverlay({ open, onClose, scheduledIds, rejectedIds, onAdd, onSkip
               display: 'flex', alignItems: 'center',
               padding: '12px 16px',
               borderBottom: '1px solid rgba(255,255,255,0.06)',
-            }}>
+              cursor: 'pointer',
+            }}
+              onClick={() => setPreviewBand(band)}
+            >
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
                   fontSize: 15, fontWeight: 600, color: '#F5F1EA',
@@ -2319,9 +2323,16 @@ function SearchOverlay({ open, onClose, scheduledIds, rejectedIds, onAdd, onSkip
                   }}>{band.blurb}</div>
                 )}
               </div>
-              <div style={{ marginLeft: 12, flexShrink: 0 }}>
+              <div style={{ marginLeft: 12, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                 {isAdded ? (
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#4ADE80' }}>✓ Added</span>
+                  <button
+                    onClick={() => onRemove(band)}
+                    style={{
+                      background: 'rgba(220,80,70,0.15)', color: '#FFB4A8',
+                      border: '1px solid rgba(220,80,70,0.3)', borderRadius: 8, padding: '6px 12px',
+                      fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >✓ Added</button>
                 ) : (
                   <button
                     onClick={() => onAdd(band)}
@@ -2337,6 +2348,15 @@ function SearchOverlay({ open, onClose, scheduledIds, rejectedIds, onAdd, onSkip
           );
         })}
       </div>
+
+      {/* Band preview sheet — tap a row to open */}
+      <BandPreviewSheet
+        band={previewBand}
+        onClose={() => setPreviewBand(null)}
+        scheduledIds={scheduledIds}
+        onAdd={(b) => { onAdd(b); setPreviewBand(null); }}
+        onRemove={(b) => { onRemove(b); setPreviewBand(null); }}
+      />
     </div>
   );
 }
