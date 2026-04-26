@@ -1957,7 +1957,7 @@ function App() {
         setActiveDay={setActiveDay}
         view={view}
         setView={setView}
-        scheduledCount={scheduledBands.length}
+        scheduledCount={scheduledBands.filter(b => b.day === activeDay).length}
         onMenuOpen={() => setMenuOpen(true)}
         onSearchOpen={() => setSearchOpen(true)}
       />
