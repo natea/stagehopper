@@ -139,18 +139,28 @@ function YouTubeEmbed({ id, band, stage, autoPlay, onFallback }) {
   const iframeRef = useRef(null);
 
   // YT IFrame API fires postMessage with error codes 100, 101, 150 when a
-  // video is unavailable or embedding is disabled. Auto-fall back immediately.
+  // video is unavailable or embedding is disabled. Also set a 5s timeout:
+  // some blocked embeds render an error UI without sending any postMessage.
   useEffect(() => {
+    let gotAnyMessage = false;
+    const fail = () => setFailed(true);
+
     const handle = (e) => {
       if (!e.origin.includes('youtube.com')) return;
+      gotAnyMessage = true;
       try {
         const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-        if (data?.event === 'infoDelivery' && data?.info?.error) setFailed(true);
-        if (data?.event === 'onError' || (data?.info && [100, 101, 150].includes(data.info.error))) setFailed(true);
+        if (data?.event === 'infoDelivery' && data?.info?.error) fail();
+        if (data?.event === 'onError') fail();
+        if (data?.info && [100, 101, 150].includes(data.info.error)) fail();
       } catch {}
     };
     window.addEventListener('message', handle);
-    return () => window.removeEventListener('message', handle);
+
+    // Fallback: if no YT message arrives within 5s the embed is silently blocked
+    const timer = setTimeout(() => { if (!gotAnyMessage) fail(); }, 5000);
+
+    return () => { window.removeEventListener('message', handle); clearTimeout(timer); };
   }, [id]);
 
   if (failed) return <YouTubeSearchTile band={band} stage={stage} />;
