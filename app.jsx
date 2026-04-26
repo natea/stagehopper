@@ -4,7 +4,7 @@
 
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
-const APP_VERSION = 'v50';
+const APP_VERSION = 'v51';
 
 // ─────────────────────────────────────────────────────────────
 // Helpers
@@ -1968,7 +1968,10 @@ function App() {
 
   const [scheduledIds, setScheduledIds] = useState(() => loadSet(LS_KEY));
   const [rejectedIds, setRejectedIds] = useState(() => loadSet(LS_REJECT));
-  const [activeDay, setActiveDay] = useState(() => localStorage.getItem(LS_DAY) || 'd3');
+  const [activeDay, setActiveDay] = useState(() => {
+    const todayId = window.DAYS?.find(d => d.date === todayDate())?.id;
+    return todayId || localStorage.getItem(LS_DAY) || window.DAYS?.[0]?.id || 'd1';
+  });
   const [userTopPicks, setUserTopPicks] = useState(() => loadSet(LS_TOPPICKS));
   const [view, setView] = useState('discover');
   const [autoPlay, setAutoPlay] = useState(t.autoPlay ?? true);
