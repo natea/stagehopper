@@ -702,6 +702,7 @@ function HamburgerMenu({ open, onClose, onShowIntro, onShowAbout }) {
           color: 'rgba(245,241,234,0.25)', lineHeight: 1.5,
         }}>
           New Orleans Jazz &amp; Heritage Festival<br />April 23 – May 3, 2026
+          <br /><strong style={{ color: 'rgba(245,241,234,0.55)' }}>v49</strong>
         </p>
       </div>
     </>
