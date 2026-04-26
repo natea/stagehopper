@@ -32,17 +32,40 @@ for (const b of bands) {
 const unique = [...seen.values()];
 console.log(`${unique.length} unique artists to re-search (${bands.length} total entries)`);
 
-function searchBest(name) {
+async function checkEmbeddable(vid) {
+  try {
+    const r = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${vid}&format=json`);
+    return r.ok;
+  } catch { return false; }
+}
+
+function searchCandidates(name) {
   return new Promise((resolve) => {
     const child = spawn('bash', ['best_yt.sh', name], { cwd: __dirname });
     let out = '';
     child.stdout.on('data', d => out += d);
-    child.stderr.on('data', () => {}); // suppress yt-dlp noise
+    child.stderr.on('data', () => {});
     child.on('close', () => {
-      const [, vid, views, title] = out.trim().split('\t');
-      resolve({ name, vid: vid || null, views: parseInt(views) || 0, title: title || '' });
+      const candidates = out.trim().split('\n')
+        .filter(Boolean)
+        .map(line => {
+          const [, vid, views, ...titleParts] = line.split('\t');
+          return { name, vid: vid || null, views: parseInt(views) || 0, title: titleParts.join('\t') };
+        })
+        .filter(c => c.vid && c.vid !== 'NOTFOUND');
+      resolve(candidates);
     });
   });
+}
+
+async function searchBest(name) {
+  const candidates = await searchCandidates(name);
+  if (candidates.length === 0) return { name, vid: null, views: 0, title: '' };
+  for (const c of candidates) {
+    if (await checkEmbeddable(c.vid)) return c;
+  }
+  // No embeddable candidate found
+  return { name, vid: null, views: 0, title: '' };
 }
 
 async function runQueue() {
@@ -60,7 +83,7 @@ async function runQueue() {
           results.push(r);
           active--;
           done++;
-          process.stdout.write(`\r${done}/${unique.length} searched...`);
+          process.stdout.write(`\r${done}/${unique.length} searched (embeddability checked)...`);
           next();
           if (active === 0 && queue.length === 0) resolve();
         });
