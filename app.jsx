@@ -905,24 +905,25 @@ function MineBandSheet({ band, conflictingBands, onClose, onRemove, onRemoveConf
         boxShadow: '0 -8px 40px rgba(0,0,0,0.6)',
         overflow: 'hidden',
       }}>
-        {/* Sheet handle + close */}
-        <div style={{ position: 'relative', padding: '14px 20px 0', flexShrink: 0 }}>
-          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(245,241,234,0.2)', margin: '0 auto' }} />
+        {/* Video with close button overlaid — capped so controls are never clipped */}
+        <div style={{ position: 'relative', width: '100%', height: 'min(56.25vw, 230px)', background: '#000', flexShrink: 0 }}>
+          <VideoPreview band={previewBand} stage={previewStage} />
+          {/* Drag handle */}
+          <div style={{ position: 'absolute', top: 8, left: 0, right: 0, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(245,241,234,0.35)' }} />
+          </div>
+          {/* Close button always visible on top of video */}
           <button
             onClick={e => { e.stopPropagation(); handleClose(); }}
             style={{
-              position: 'absolute', top: 8, right: 16,
-              width: 30, height: 30, borderRadius: 15,
-              border: 0, background: 'rgba(245,241,234,0.12)', color: 'rgba(245,241,234,0.7)',
-              fontSize: 18, lineHeight: '30px', textAlign: 'center',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              position: 'absolute', top: 10, right: 12, zIndex: 10,
+              width: 32, height: 32, borderRadius: 16,
+              border: 0, background: 'rgba(0,0,0,0.6)', color: '#fff',
+              fontSize: 20, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backdropFilter: 'blur(6px)',
             }}
           >×</button>
-        </div>
-
-        {/* Video — switches when tapping a row */}
-        <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', flexShrink: 0 }}>
-          <VideoPreview band={previewBand} stage={previewStage} />
         </div>
 
         {/* Scrollable body */}
