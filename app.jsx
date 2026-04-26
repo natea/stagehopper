@@ -785,6 +785,9 @@ function AboutSheet({ open, onClose }) {
                 StageHopper currently covers the NOLA Jazz Fest lineup. A version that works with <strong style={{ color: '#F5F1EA' }}>any music festival</strong> is in the works — stay tuned.
               </div>
             </div>
+            <div style={{ marginTop: 24, fontSize: 11, color: 'rgba(245,241,234,0.25)', textAlign: 'center' }}>
+              v47
+            </div>
           </div>
         </div>
       </div>
@@ -2356,6 +2359,7 @@ function SearchOverlay({ open, onClose, scheduledIds, rejectedIds, onAdd, onRemo
               cursor: 'pointer',
             }}
               onClick={() => onPreview(band)}
+              onTouchEnd={(e) => { e.preventDefault(); onPreview(band); }}
             >
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{

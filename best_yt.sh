@@ -10,8 +10,10 @@ name="$1"
 # Helps disambiguate band names that collide with famous song titles.
 context="${2:-New Orleans music}"
 
-# Channel name patterns to reject (news outlets, talk shows, TV stations)
-NEWS_PAT='news|nbc|cbs|abc|cnn|fox|msnbc|bbc|npr|pbs|reuters|associated press|ap news|guardian|washington post|new york times|today show|tonight show|late show|late night|daily show|colbert|fallon|kimmel|letterman|conan|60 minutes|dateline|nightline|morning joe|good morning|wdsu|wvue|wdaf|wral|wbtv|khou|ksat|ktvu|wsb|wfaa|kxan|tegna|nexstar|gray tv|sinclair|hearst'
+# Channel name patterns to reject (news outlets, talk shows, TV stations).
+# NPR and PBS are intentionally excluded from this filter — NPR Music (Tiny Desk)
+# and PBS (Austin City Limits) are premier music performance channels we want.
+NEWS_PAT='news|nbc|cbs|abc|cnn|fox|msnbc|bbc|reuters|associated press|ap news|guardian|washington post|new york times|today show|tonight show|late show|late night|daily show|colbert|fallon|kimmel|letterman|conan|60 minutes|dateline|nightline|morning joe|good morning|wdsu|wvue|wdaf|wral|wbtv|khou|ksat|ktvu|wsb|wfaa|kxan|tegna|nexstar|gray tv|sinclair|hearst'
 
 # Title keyword patterns to reject (crime, legal, missing persons, obits, interviews about non-music topics)
 TITLE_PAT='missing|found dead|murder|homicide|arrest|arrested|charged|guilty|pleads|suspect|victim|search for|body found|shooting|stabbing|overdose|obituary|funeral|kidnap|abduct|police|sheriff|fbi|indicted|convicted|sentenc|trial|lawsuit|mug shot|mugshot|breaking news|amber alert'
