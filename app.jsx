@@ -615,7 +615,7 @@ function MapViewer({ src, title, onClose }) {
 // ─────────────────────────────────────────────────────────────
 // Hamburger slide-out menu
 // ─────────────────────────────────────────────────────────────
-function HamburgerMenu({ open, onClose, onShowIntro }) {
+function HamburgerMenu({ open, onClose, onShowIntro, onShowAbout }) {
   if (!open) return null;
   return (
     <>
@@ -660,6 +660,7 @@ function HamburgerMenu({ open, onClose, onShowIntro }) {
 
         <MenuSection label="Help" />
         <MenuRow icon="❓" label="How to use this app" onPress={() => { onClose(); onShowIntro(); }} />
+        <MenuRow icon="ℹ️" label="About StageHopper" onPress={() => { onClose(); onShowAbout(); }} />
 
         <div style={{ flex: 1 }} />
         <p style={{
@@ -680,6 +681,80 @@ function MenuSection({ label }) {
       fontSize: 10, fontWeight: 700, letterSpacing: 1,
       color: 'rgba(245,241,234,0.35)', textTransform: 'uppercase',
     }}>{label}</div>
+  );
+}
+
+function AboutSheet({ open, onClose }) {
+  if (!open) return null;
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'flex-end' }}
+      onClick={onClose}
+    >
+      <div onClick={e => e.stopPropagation()} style={{
+        background: '#1A1816', borderRadius: '20px 20px 0 0',
+        width: '100%', maxHeight: '85vh', overflowY: 'auto',
+        boxShadow: '0 -8px 40px rgba(0,0,0,0.6)',
+        paddingBottom: 'max(32px, env(safe-area-inset-bottom, 32px))',
+      }}>
+        {/* Handle + close */}
+        <div style={{ position: 'relative', padding: '14px 20px 0', flexShrink: 0 }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(245,241,234,0.2)', margin: '0 auto' }} />
+          <button onClick={onClose} style={{
+            position: 'absolute', top: 8, right: 16,
+            width: 30, height: 30, borderRadius: 15,
+            border: 0, background: 'rgba(245,241,234,0.1)', color: 'rgba(245,241,234,0.7)',
+            fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>×</button>
+        </div>
+
+        <div style={{ padding: '20px 24px 0' }}>
+          <div style={{ fontFamily: 'Georgia, serif', fontSize: 26, fontWeight: 700, color: '#F5F1EA', marginBottom: 4 }}>
+            StageHopper
+          </div>
+          <div style={{ fontSize: 12, color: 'rgba(245,241,234,0.4)', marginBottom: 20, letterSpacing: 0.3 }}>
+            New Orleans Jazz &amp; Heritage Festival 2026
+          </div>
+
+          <div style={{ fontSize: 14, lineHeight: 1.65, color: 'rgba(245,241,234,0.8)', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <p style={{ margin: 0 }}>
+              StageHopper was born out of a bad experience at the Montreal Jazz Festival — wandering between stages with no idea who anyone was, missing sets worth staying for. The idea: let festivalgoers <em>hear</em> the artists before committing to a stage, so every set you catch is one you actually chose.
+            </p>
+            <p style={{ margin: 0 }}>
+              Beyond the headliners, Jazz Fest has hundreds of artists most people have never heard of. StageHopper is as much a discovery tool as a schedule — swipe through the lineup, let the videos play, and you'll find artists you didn't know you loved.
+            </p>
+            <p style={{ margin: 0 }}>
+              The app was built in a single day using <strong style={{ color: '#F5F1EA' }}>Claude Code</strong>, then iterated on live at the festival using Claude Code's <strong style={{ color: '#F5F1EA' }}>/remote-control</strong> feature — identifying a bug or feature idea on the grounds and deploying a fix in minutes, without leaving the festival.
+            </p>
+
+            <div style={{
+              borderTop: '1px solid rgba(245,241,234,0.1)',
+              paddingTop: 14, marginTop: 4,
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: 'rgba(245,241,234,0.35)', textTransform: 'uppercase', marginBottom: 10 }}>Built by</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: '#F5F1EA', marginBottom: 4 }}>Nate Aune</div>
+              <a
+                href="mailto:nate@backlit.life"
+                onClick={e => e.stopPropagation()}
+                style={{ color: '#FBBF24', fontSize: 13, textDecoration: 'none' }}
+              >nate@backlit.life</a>
+            </div>
+
+            <div style={{
+              background: 'rgba(251,191,36,0.08)',
+              border: '1px solid rgba(251,191,36,0.25)',
+              borderRadius: 10, padding: '12px 14px',
+              marginTop: 4,
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#FBBF24', marginBottom: 4 }}>Coming soon</div>
+              <div style={{ fontSize: 13, color: 'rgba(245,241,234,0.7)', lineHeight: 1.5 }}>
+                StageHopper currently covers the NOLA Jazz Fest lineup. A version that works with <strong style={{ color: '#F5F1EA' }}>any music festival</strong> is in the works — stay tuned.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1806,6 +1881,7 @@ function App() {
   const [autoPlay, setAutoPlay] = useState(t.autoPlay ?? true);
   const [undoStack, setUndoStack] = useState([]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [showIntro, setShowIntro] = useState(() => !localStorage.getItem(LS_INTRO));
   const [mapView, setMapView] = useState(null); // 'festival' | 'access' | null
   const [browseStage, setBrowseStage] = useState(null); // null = timeslot mode; stageId = stage-browse mode
@@ -2017,7 +2093,11 @@ function App() {
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         onShowIntro={() => setShowIntro(true)}
+        onShowAbout={() => setAboutOpen(true)}
       />
+
+      {/* About sheet */}
+      <AboutSheet open={aboutOpen} onClose={() => setAboutOpen(false)} />
 
       {/* First-run intro overlay */}
       {showIntro && (
