@@ -40,6 +40,21 @@ async function checkEmbeddable(vid) {
   } catch { return false; }
 }
 
+// For tribute acts ("A Tribute to X featuring A, B, C"), extract the featured
+// performers so we search for who's actually on stage, not the tribute subject.
+function searchNameFor(band) {
+  const n = band.name;
+  if (/tribute/i.test(n)) {
+    const feat = n.match(/featuring\s+(.+)$/i);
+    if (feat) {
+      // Use just the first featured artist as the search anchor
+      const first = feat[1].split(/,\s*/)[0].trim();
+      return first;
+    }
+  }
+  return n;
+}
+
 function searchCandidates(name, stageName) {
   // Pass stage name as context so "Boyfriend" doesn't match Justin Bieber's song, etc.
   const context = stageName ? `${stageName} New Orleans music` : 'New Orleans music';
@@ -61,7 +76,8 @@ function searchCandidates(name, stageName) {
   });
 }
 
-async function searchBest(name, stageName) {
+async function searchBest(band, stageName) {
+  const name = searchNameFor(band);
   const candidates = await searchCandidates(name, stageName);
   if (candidates.length === 0) return { name, vid: null, views: 0, title: '' };
   for (const c of candidates) {
@@ -82,7 +98,7 @@ async function runQueue() {
       while (active < PARALLEL && queue.length > 0) {
         const band = queue.shift();
         active++;
-        searchBest(band.name, STAGE_BY_ID?.[band.stage]?.name).then(r => {
+        searchBest(band, STAGE_BY_ID?.[band.stage]?.name).then(r => {
           results.push(r);
           active--;
           done++;
