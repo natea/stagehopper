@@ -140,8 +140,16 @@ function YouTubeEmbed({ id, band, stage, autoPlay, onFallback }) {
 
   // YT IFrame API fires postMessage with error codes 100, 101, 150 when a
   // video is unavailable or embedding is disabled.
+  // Also use postMessage to trigger play on ready — iOS Safari ignores autoplay=1
+  // in the URL when the triggering gesture (swipe) wasn't directly on the iframe.
   useEffect(() => {
     const fail = () => setFailed(true);
+    const play = () => iframeRef.current?.contentWindow?.postMessage(
+      JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*'
+    );
+    const pause = () => iframeRef.current?.contentWindow?.postMessage(
+      JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }), '*'
+    );
 
     const handle = (e) => {
       if (!e.origin.includes('youtube.com')) return;
@@ -150,12 +158,17 @@ function YouTubeEmbed({ id, band, stage, autoPlay, onFallback }) {
         if (data?.event === 'infoDelivery' && data?.info?.error) fail();
         if (data?.event === 'onError') fail();
         if (data?.info && [100, 101, 150].includes(data.info.error)) fail();
+        // When the player is ready, trigger play/pause based on autoPlay prop
+        if (data?.event === 'onReady') { if (autoPlay) play(); }
       } catch {}
     };
     window.addEventListener('message', handle);
 
+    // If autoPlay was just toggled on for an already-loaded player, play now.
+    if (autoPlay) play(); else pause();
+
     return () => window.removeEventListener('message', handle);
-  }, [id]);
+  }, [id, autoPlay]);
 
   if (failed) return <YouTubeSearchTile band={band} stage={stage} />;
 
