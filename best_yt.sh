@@ -13,6 +13,9 @@ context="${2:-New Orleans music}"
 # Channel name patterns to reject (news outlets, talk shows, TV stations)
 NEWS_PAT='news|nbc|cbs|abc|cnn|fox|msnbc|bbc|npr|pbs|reuters|associated press|ap news|guardian|washington post|new york times|today show|tonight show|late show|late night|daily show|colbert|fallon|kimmel|letterman|conan|60 minutes|dateline|nightline|morning joe|good morning|wdsu|wvue|wdaf|wral|wbtv|khou|ksat|ktvu|wsb|wfaa|kxan|tegna|nexstar|gray tv|sinclair|hearst'
 
+# Title keyword patterns to reject (crime, legal, missing persons, obits, interviews about non-music topics)
+TITLE_PAT='missing|found dead|murder|homicide|arrest|arrested|charged|guilty|pleads|suspect|victim|search for|body found|shooting|stabbing|overdose|obituary|funeral|kidnap|abduct|police|sheriff|fbi|indicted|convicted|sentenc|trial|lawsuit|mug shot|mugshot|breaking news|amber alert'
+
 # Put the name in quotes to match as a phrase, then append context.
 # Quoting prevents "Boyfriend" from matching Justin Bieber's song "Boyfriend".
 results=$(yt-dlp "ytsearch8:\"${name}\" ${context}" \
@@ -21,7 +24,8 @@ results=$(yt-dlp "ytsearch8:\"${name}\" ${context}" \
   --ignore-errors \
   2>/dev/null \
   | grep -v '^NA' \
-  | awk -F'\t' -v pat="$NEWS_PAT" '{ if (tolower($3) !~ pat) print $1"\t"$2"\t"$4 }' \
+  | awk -F'\t' -v npat="$NEWS_PAT" -v tpat="$TITLE_PAT" \
+      '{ if (tolower($3) !~ npat && tolower($4) !~ tpat) print $1"\t"$2"\t"$4 }' \
   | sort -t$'\t' -k1 -rn)
 
 if [[ -z "$results" ]]; then
