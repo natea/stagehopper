@@ -159,9 +159,9 @@ function YouTubeEmbed({ id, band, stage, autoPlay, onFallback }) {
   // can't validate the origin. Hosting over http(s) (PWA) makes them work.
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const originParam = origin && origin !== 'null' && !origin.startsWith('file') ? `&origin=${encodeURIComponent(origin)}` : '';
-  // autoplay=1&mute=1: browsers allow muted autoplay without a user gesture (TikTok-style).
-  // The user can unmute inside the player. When autoPlay is off, video waits for a tap.
-  const autoParams = autoPlay ? '&autoplay=1&mute=1' : '&autoplay=0';
+  // autoplay=1: play with sound after user has interacted with the page (swiping counts).
+  // When autoPlay is off, video waits for a tap.
+  const autoParams = autoPlay ? '&autoplay=1' : '&autoplay=0';
   const src = `https://www.youtube.com/embed/${id}?controls=1&modestbranding=1&playsinline=1&rel=0&enablejsapi=1${autoParams}${originParam}`;
   return (
     <>
