@@ -13,3 +13,7 @@ Jazz Festival ScheduleBot - standalone.html
 .DS_Store
 *.swp
 node_modules/
+
+# Tooling artifacts (MCP logs, rendered previews)
+.playwright-mcp/
+.clearance-rendered-preview-*/
